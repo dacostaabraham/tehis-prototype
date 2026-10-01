@@ -65,6 +65,12 @@ export const AGENTS = {
     intro: 'Je note tes rappels, tes listes de courses ou de tâches, et je t\'aide à organiser ta semaine. Exemple : « Rappelle-moi de payer le loyer le 5 à 9 h ».',
     suggestions: ['Rappelle-moi demain à 8 h', 'Ma liste de courses', 'Organise ma semaine', 'Qu\'est-ce que j\'ai de prévu ?']
   },
+  sante: {
+    nom: 'Santé au quotidien', icone: '🩺', groupe: 'quotidien', offre: 'gratuit', modele: 'fort', recherche: true,
+    resume: 'Infos santé pratiques, pharmacies, quand consulter',
+    intro: "Je te donne des infos santé pratiques pour la vie de tous les jours : que faire en cas de fièvre, où trouver une pharmacie de garde, quand aller au centre de santé. Je ne fais pas de diagnostic, je t'oriente vers un pro.",
+    suggestions: ['Que faire en cas de fièvre chez un enfant ?', 'Pharmacie de garde près de moi ce soir', 'Quand faut-il aller au centre de santé ?', 'Rappelle-moi de prendre mon traitement à 8 h']
+  },
   dev: {
     nom: 'Mode développeur', icone: '⌨️', groupe: 'dev', offre: 'pro', modele: 'fort', developpeur: true,
     resume: 'Code, GitHub et déploiement Render, avec ta validation',
