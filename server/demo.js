@@ -64,6 +64,8 @@ export async function reponseDemo(agent, message, { nomCompagnon, send, store, f
     document = await creerDocument(store, DOCS_DEMO[agent], agent);
   } else if (INTROS[agent]) {
     intro = INTROS[agent];
+  } else if (/pr[ée]sente|qui es-tu|qui es tu|que (peux|sais)-tu|quels agents|aide-moi/.test(texte)) {
+    intro = `Moi c'est ${nom}, ton compagnon dans Tehis. Je discute avec toi et je t'oriente vers le bon agent :\n\n- **Vendeur en ligne** : fiches produits, réponses aux clients\n- **Rédaction et courriers** : lettres, réclamations, messages\n- **Emploi et CV** : CV, lettre de motivation, entretien\n- **Budget et tontine** : budget du mois, épargne, tontine\n- **Finance entreprise** : point mort, prix, prévisionnel\n- **Démarches administratives** : étapes, pièces, coûts\n- **Répétiteur scolaire** : devoirs et révisions\n- **Organisation et rappels** : rappels, listes, planning\n\nTu peux aussi **créer ton propre agent**. Touche mon nom en haut de l'écran pour choisir. (Mode démo : je réponds avec des exemples tant que la clé API n'est pas active.)`;
   } else if (/bonjour|salut|hello|bonsoir/.test(texte)) {
     intro = `Salut ! Moi c'est ${nom}. Je tourne en mode démo pour l'instant : je ne comprends pas encore vraiment tes messages. Dès que la clé API sera ajoutée dans Render, je pourrai discuter pour de vrai. Tu peux déjà essayer les agents : chacun montre un exemple.`;
   } else {

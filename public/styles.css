@@ -265,3 +265,4 @@ select { width: 100%; min-height: 46px; padding: 10px 12px; border-radius: 12px;
 #perso-supprimer { margin-top: 10px; align-self: flex-start; }
 .coche.outil input:checked + span { text-decoration: none; color: inherit; }
 .perso-sheet .item-list { padding-left: 0; }
+.msg.err .reessayer { color: var(--bad); text-decoration: underline; margin-top: 4px; }

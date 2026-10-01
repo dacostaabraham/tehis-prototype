@@ -207,7 +207,14 @@ function rendreItem(it, items) {
 function afficherHistorique() {
   const zone = $('#messages');
   zone.innerHTML = '';
-  const items = lsGet(cleHisto(), []);
+  const brut = lsGet(cleHisto(), []);
+  // Retire les messages restés sans réponse et renvoyés à l'identique (anciennes versions).
+  const items = brut.filter((it, i) => {
+    if (it.role !== 'user') return true;
+    const suivant = brut.slice(i + 1).find((x) => x.role);
+    return !(suivant?.role === 'user' && suivant.content === it.content);
+  });
+  if (items.length !== brut.length) lsSet(cleHisto(), items);
   const a = metaAgent(etat.agent);
   if (!items.length) {
     ajouterBulle('bot', etat.agent === 'compagnon'
@@ -304,9 +311,12 @@ async function envoyer(texte, { auto = false, agent = etat.agent } = {}) {
   retirerPhoto();
   items.push({ role: 'user', content: texte, ...(photo ? { photo: true } : {}), ...(auto ? { auto: true } : {}) });
   lsSet(cle, items);
+  const indexUser = items.length - 1;
   const visible = agent === etat.agent;
-  if (visible) rendreItem(items.at(-1), items);
   const zone = $('#messages');
+  if (visible) rendreItem(items.at(-1), items);
+  const bulleUser = visible ? zone.lastElementChild : null;
+  let erreur = null;
   let bulle = visible ? ajouterBulle('bot', '') : document.createElement('div');
   bulle.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
   let courant = '';
@@ -351,13 +361,13 @@ async function envoyer(texte, { auto = false, agent = etat.agent } = {}) {
           if (evt === 'sources') ajouter({ type: 'sources', sources: data.sources });
           if (evt === 'memory') ajouter({ type: 'memory', fait: data.fait });
           nouvelleBulle();
-        } else if (evt === 'error') {
-          const n = document.createElement('div'); n.className = 'msg err'; n.textContent = data.message; zone.appendChild(n);
-        }
+        } else if (evt === 'error') erreur = data.message;
         zone.scrollTop = zone.scrollHeight;
       }
     }
     coupure();
+    if (erreur && items.length === indexUser + 1) throw new Error(erreur);
+    if (erreur) afficherErreur(erreur);
     // Si l'agent n'a répondu que par des cartes, on garde une trace pour la suite de la conversation.
     if (items.filter((i) => i.role).at(-1)?.role === 'user') {
       const cartes = items.slice(items.lastIndexOf(items.filter((i) => i.role).at(-1)) + 1).map((i) => i.type).filter(Boolean);
@@ -366,12 +376,29 @@ async function envoyer(texte, { auto = false, agent = etat.agent } = {}) {
     // L'historique garde au plus 80 éléments par agent sur le téléphone.
     lsSet(cle, items.slice(-80));
   } catch (ex) {
+    // Rien n'a été répondu : le message n'est pas gardé, on propose de le renvoyer.
     bulle.remove();
-    const n = document.createElement('div'); n.className = 'msg err'; n.textContent = ex.message; zone.appendChild(n);
+    if (items.length === indexUser + 1) { items.splice(indexUser, 1); lsSet(cle, items); bulleUser?.remove(); }
+    afficherErreur(ex.message, auto ? null : () => { input.value = texte; $('#composer').requestSubmit(); });
     humeur('repos');
   } finally {
     etat.envoi = false; $('#send').disabled = false;
   }
+}
+
+function afficherErreur(message, reessayer) {
+  const n = document.createElement('div');
+  n.className = 'msg err';
+  n.textContent = message;
+  if (reessayer) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'lien reessayer'; b.textContent = 'Réessayer';
+    b.onclick = () => { n.remove(); reessayer(); };
+    n.appendChild(document.createElement('br'));
+    n.appendChild(b);
+  }
+  $('#messages').appendChild(n);
+  $('#messages').scrollTop = $('#messages').scrollHeight;
 }
 
 /* Après une validation dans le mode développeur, l'agent reprend avec le résultat. */
