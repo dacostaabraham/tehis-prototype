@@ -85,3 +85,31 @@ export function accesAgent(id, profil = {}) {
   if (a.developpeur && !profil.developpeur) return { ok: false, raison: 'Active d\'abord le mode développeur dans les réglages.' };
   return { ok: true };
 }
+
+/* ---------- Agents personnalisés (« Crée ton agent ») ---------- */
+
+// Outils que l'utilisateur peut donner à son agent. offre : offre minimale.
+export const OUTILS_PERSO = {
+  documents: { nom: 'Documents', resume: 'Lettres, fiches, messages prêts à copier, partager ou mettre en PDF', offre: 'gratuit' },
+  rappels: { nom: 'Rappels et listes', resume: 'Programmer des rappels, tenir des listes', offre: 'gratuit' },
+  budget: { nom: 'Calculs budget', resume: 'Budget du mois, épargne, tontine', offre: 'gratuit' },
+  finance: { nom: 'Calculs entreprise', resume: 'Point mort, prix, prévisionnel, BFR', offre: 'plus' },
+  recherche_web: { nom: 'Recherche sur internet', resume: 'Vérifier une information récente, avec sources', offre: 'pro' }
+};
+
+// Par offre : nombre d'agents, messages par jour (tous agents personnalisés), connaissances autorisées.
+export const LIMITES_PERSO = {
+  gratuit: { agents: 1, messagesParJour: 20, connaissances: false, modeleFort: false },
+  plus: { agents: 3, messagesParJour: 100, connaissances: true, modeleFort: false },
+  pro: { agents: 10, messagesParJour: 300, connaissances: true, modeleFort: true }
+};
+
+export const TONS_PERSO = {
+  chaleureux: 'Chaleureux et encourageant',
+  professionnel: 'Professionnel et courtois',
+  direct: 'Direct et concis',
+  ivoirien: 'Familier, à l\'ivoirienne (sans excès)'
+};
+
+export const MAX_CONNAISSANCES = 50_000; // caractères par agent
+export const estPerso = (id) => typeof id === 'string' && id.startsWith('perso:');

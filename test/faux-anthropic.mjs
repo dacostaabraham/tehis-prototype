@@ -36,6 +36,13 @@ http.createServer((req, res) => {
     requetes.push(b);
     writeFileSync(process.env.FAUX_JOURNAL || '/tmp/faux-anthropic.json', JSON.stringify(requetes, null, 1));
     const noms = (b.tools || []).map((t) => t.name);
+    if (!b.stream && noms.includes('proposer_fiche')) {
+      const refus = /arnaque|faux reçus/i.test(JSON.stringify(b.messages));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ id: 'msg_f', type: 'message', role: 'assistant', model: 'faux', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 50, output_tokens: 80 },
+        content: [{ type: 'tool_use', id: 'toolu_f', name: 'proposer_fiche', input: refus ? { refus: 'Je ne peux pas créer un agent destiné à tromper des personnes.', nom: '', icone: '', resume: '', mission: '', ton: 'direct', regles: [], suggestions: [], outils: [] }
+          : { nom: 'Coiffure Awa', icone: '💇🏾‍♀️', resume: 'Conseille les clientes et prépare les rappels de rendez-vous', mission: 'Tu aides les clientes du salon Awa à Yopougon à choisir une coiffure et tu donnes les tarifs : tresses 5 000 FCFA, nattes 3 000 FCFA.', ton: 'chaleureux', regles: ['Toujours rappeler les tarifs en FCFA'], suggestions: ['Quelle coiffure pour un mariage ?', 'Prépare un rappel de rendez-vous'], outils: ['documents', 'rappels'] } }] }));
+    }
     const dernier = b.messages.at(-1);
     const apresOutil = Array.isArray(dernier.content) && dernier.content.some((c) => c.type === 'tool_result');
 

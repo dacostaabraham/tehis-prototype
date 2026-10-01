@@ -15,7 +15,8 @@ import { executerOrganisation } from './outils/organisation.js';
 import { executerDev, preparerAction, OUTILS_A_VALIDER, SCHEMAS_DEV } from './outils/dev.js';
 import { OUTILS_FINANCE } from '../public/shared/finance.js';
 import { OUTILS_BUDGET } from '../public/shared/budget.js';
-import { AGENTS, OFFRES, accesAgent } from '../public/shared/agents.js';
+import { AGENTS, OFFRES, accesAgent, estPerso } from '../public/shared/agents.js';
+import { nettoyerFiche, instructionsPerso, outilsPerso, limites, OUTIL_FICHE, SYSTEME_FICHE, ficheDemo } from './perso.js';
 import { markdown, echapper } from '../public/shared/markdown.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -197,6 +198,57 @@ app.post('/api/actions/:id', async (req, res) => {
   res.json({ statut, resultat });
 });
 
+/* ---------- Agents personnalisés ---------- */
+const jourAbidjan = () => new Date().toISOString().slice(0, 10);
+async function etatPersos() {
+  const p = await profil();
+  const lim = limites(p.offre);
+  const agents = await store.listCustomAgents();
+  return { agents: agents.map((a, i) => ({ ...a, verrouille: i >= lim.agents })), limites: lim, offre: p.offre, utilisesAujourdhui: await store.getUsage(jourAbidjan(), 'perso') };
+}
+app.get('/api/persos', async (_req, res) => res.json(await etatPersos()));
+
+app.post('/api/persos/brouillon', limite, async (req, res) => {
+  const description = String(req.body?.description || '').trim().slice(0, 1500);
+  if (description.length < 15) return res.status(400).json({ erreur: 'Décris ton besoin en une ou deux phrases.' });
+  if (!anthropic) return res.json(ficheDemo(description));
+  try {
+    const r = await anthropic.messages.create({
+      model: MODELE_LEGER, max_tokens: 2000, system: SYSTEME_FICHE, tools: [OUTIL_FICHE],
+      tool_choice: { type: 'tool', name: 'proposer_fiche' },
+      messages: [{ role: 'user', content: `Description de l'agent souhaité :\n${description}` }]
+    });
+    const bloc = r.content.find((b) => b.type === 'tool_use');
+    if (!bloc) return res.status(502).json({ erreur: 'Pas de proposition. Réessaie en décrivant ton besoin autrement.' });
+    if (bloc.input.refus) return res.status(422).json({ erreur: bloc.input.refus });
+    res.json(bloc.input);
+  } catch (e) {
+    console.error(/credit balance|billing/i.test(e?.message || '') ? '[ALERTE ADMIN] CRÉDIT ANTHROPIC ÉPUISÉ' : 'Brouillon agent :', e?.status, e?.message);
+    res.status(503).json({ erreur: 'La proposition automatique est indisponible pour le moment. Tu peux remplir la fiche toi-même.' });
+  }
+});
+
+app.post('/api/persos', async (req, res) => {
+  const p = await profil();
+  const lim = limites(p.offre);
+  if ((await store.listCustomAgents()).length >= lim.agents) {
+    return res.status(403).json({ erreur: `Ton offre permet ${lim.agents} agent${lim.agents > 1 ? 's' : ''} personnalisé${lim.agents > 1 ? 's' : ''}. Passe à une offre supérieure pour en créer plus.` });
+  }
+  const { fiche, erreur } = nettoyerFiche(req.body, p.offre);
+  if (erreur) return res.status(400).json({ erreur });
+  res.json(await store.saveCustomAgent(fiche));
+});
+
+app.put('/api/persos/:id', async (req, res) => {
+  const existante = await store.getCustomAgent(req.params.id);
+  if (!existante) return res.status(404).json({ erreur: 'Agent introuvable.' });
+  const { fiche, erreur } = nettoyerFiche(req.body, (await profil()).offre, existante);
+  if (erreur) return res.status(400).json({ erreur });
+  res.json(await store.saveCustomAgent(fiche));
+});
+
+app.delete('/api/persos/:id', async (req, res) => { await store.deleteCustomAgent(req.params.id); res.json({ ok: true }); });
+
 /* ---------- Chat ---------- */
 const TYPES_IMAGES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 function lireImages(images) {
@@ -287,10 +339,25 @@ function sources(contenu) {
 }
 
 app.post('/api/chat', limite, async (req, res) => {
-  const agent = AGENTS[req.body?.agent] ? req.body.agent : 'compagnon';
   const p = await profil();
-  const acces = accesAgent(agent, p);
-  if (!acces.ok) return res.status(403).json({ erreur: acces.raison });
+  let agent = AGENTS[req.body?.agent] ? req.body.agent : 'compagnon';
+  let fiche = null;
+  if (estPerso(req.body?.agent)) {
+    const id = req.body.agent.slice(6);
+    const tous = await store.listCustomAgents();
+    const rang = tous.findIndex((a) => a.id === id);
+    if (rang < 0) return res.status(404).json({ erreur: 'Cet agent n\'existe plus.' });
+    const lim = limites(p.offre);
+    if (rang >= lim.agents) return res.status(403).json({ erreur: 'Cet agent est verrouillé avec ton offre actuelle.' });
+    if ((await store.getUsage(jourAbidjan(), 'perso')) >= lim.messagesParJour) {
+      return res.status(429).json({ erreur: `Tu as utilisé tes ${lim.messagesParJour} messages du jour avec tes agents personnalisés. Ils reviennent demain${p.offre === 'pro' ? '.' : ', ou passe à une offre supérieure pour en avoir plus.'}` });
+    }
+    fiche = tous[rang];
+    agent = 'perso';
+  } else {
+    const acces = accesAgent(agent, p);
+    if (!acces.ok) return res.status(403).json({ erreur: acces.raison });
+  }
   const historique = nettoyerHistorique(req.body?.messages);
   if (!historique.length || historique.at(-1).role !== 'user') return res.status(400).json({ erreur: 'Message manquant.' });
 
@@ -303,21 +370,24 @@ app.post('/api/chat', limite, async (req, res) => {
   res.on('close', () => { ferme = true; });
   const send = (event, data) => { if (!ferme) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); };
 
-  const modele = AGENTS[agent].modele === 'leger' ? MODELE_LEGER : MODELE_FORT;
+  const modele = fiche
+    ? (fiche.modeleFort || fiche.outils.includes('recherche_web') ? MODELE_FORT : MODELE_LEGER)
+    : AGENTS[agent].modele === 'leger' ? MODELE_LEGER : MODELE_FORT;
   try {
     if (!anthropic) {
       const dernier = historique.at(-1).content;
-      await reponseDemo(agent, typeof dernier === 'string' ? dernier : dernier.at(-1).text, { nomCompagnon: p.nomCompagnon, send, store });
+      await reponseDemo(agent, typeof dernier === 'string' ? dernier : dernier.at(-1).text, { nomCompagnon: p.nomCompagnon, send, store, fiche });
       send('done', { demo: true });
       return res.end();
     }
 
     const souvenirs = (await store.listMemories()).slice(0, 40);
     const system = [
-      { type: 'text', text: instructionsStatiques(agent), cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: fiche ? instructionsPerso(fiche) : instructionsStatiques(agent), cache_control: { type: 'ephemeral' } },
       { type: 'text', text: contexteDynamique({ ...p, souvenirs }) }
     ];
-    let listeOutils = outils(agent);
+    let listeOutils = fiche ? outilsPerso(fiche) : outils(agent);
+    if (fiche) await store.incrementUsage(jourAbidjan(), 'perso');
     const messages = [...historique];
     const usage = { input: 0, output: 0, recherches: 0 };
     const toutesSources = new Map();

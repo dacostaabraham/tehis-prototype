@@ -10,6 +10,7 @@ class MemoryStore {
   constructor() {
     this.profile = {}; this.memories = []; this.documents = []; this.reminders = []; this.lists = [];
     this.actions = []; this.secrets = new Map(); this.subs = new Map();
+    this.persos = []; this.usage = new Map();
   }
   async init() {}
   get kind() { return 'memoire-vive'; }
@@ -54,6 +55,19 @@ class MemoryStore {
   async getSecret(nom) { return this.secrets.get(nom) ?? null; }
   async setSecret(nom, valeur) { if (valeur === null) this.secrets.delete(nom); else this.secrets.set(nom, valeur); }
 
+  async listCustomAgents() { return [...this.persos].sort(tri('created_at', 1)); }
+  async getCustomAgent(id) { return this.persos.find((a) => a.id === id) || null; }
+  async saveCustomAgent(a) {
+    const maintenant = new Date().toISOString();
+    const i = this.persos.findIndex((x) => x.id === a.id);
+    const x = { ...a, created_at: i >= 0 ? this.persos[i].created_at : maintenant, updated_at: maintenant };
+    if (i >= 0) this.persos[i] = x; else this.persos.push(x);
+    return x;
+  }
+  async deleteCustomAgent(id) { this.persos = this.persos.filter((a) => a.id !== id); }
+  async incrementUsage(jour, cle) { const k = `${jour}|${cle}`; const n = (this.usage.get(k) || 0) + 1; this.usage.set(k, n); return n; }
+  async getUsage(jour, cle) { return this.usage.get(`${jour}|${cle}`) || 0; }
+
   async addSubscription(sub) { this.subs.set(sub.endpoint, sub); }
   async listSubscriptions() { return [...this.subs.values()]; }
   async deleteSubscription(endpoint) { this.subs.delete(endpoint); }
@@ -75,6 +89,8 @@ class PgStore {
       create table if not exists actions (id uuid primary key, outil text not null, input jsonb not null, resume text not null, statut text not null, resultat jsonb, created_at timestamptz not null default now());
       create table if not exists secrets (nom text primary key, valeur text not null);
       create table if not exists push_subscriptions (endpoint text primary key, data jsonb not null);
+      create table if not exists custom_agents (id uuid primary key, data jsonb not null, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+      create table if not exists usage (jour text not null, cle text not null, n int not null default 0, primary key (jour, cle));
       insert into profile (id) values (1) on conflict do nothing;`);
   }
   async getProfile() { return (await this.q('select data from profile where id = 1')).rows[0]?.data ?? {}; }
@@ -114,6 +130,17 @@ class PgStore {
     if (valeur === null) await this.q('delete from secrets where nom = $1', [nom]);
     else await this.q('insert into secrets (nom, valeur) values ($1,$2) on conflict (nom) do update set valeur = excluded.valeur', [nom, valeur]);
   }
+
+  #perso(r) { return r && { ...r.data, id: r.id, created_at: new Date(r.created_at).toISOString(), updated_at: new Date(r.updated_at).toISOString() }; }
+  async listCustomAgents() { return (await this.q('select * from custom_agents order by created_at asc')).rows.map((r) => this.#perso(r)); }
+  async getCustomAgent(id) { return this.#perso((await this.q('select * from custom_agents where id = $1', [id])).rows[0]); }
+  async saveCustomAgent(a) {
+    const { id, created_at, updated_at, ...data } = a;
+    return this.#perso((await this.q('insert into custom_agents (id, data) values ($1,$2) on conflict (id) do update set data = excluded.data, updated_at = now() returning *', [id, JSON.stringify(data)])).rows[0]);
+  }
+  async deleteCustomAgent(id) { await this.q('delete from custom_agents where id = $1', [id]); }
+  async incrementUsage(jour, cle) { return (await this.q('insert into usage (jour, cle, n) values ($1,$2,1) on conflict (jour, cle) do update set n = usage.n + 1 returning n', [jour, cle])).rows[0].n; }
+  async getUsage(jour, cle) { return (await this.q('select n from usage where jour = $1 and cle = $2', [jour, cle])).rows[0]?.n || 0; }
 
   async addSubscription(sub) { await this.q('insert into push_subscriptions (endpoint, data) values ($1,$2) on conflict (endpoint) do update set data = excluded.data', [sub.endpoint, JSON.stringify(sub)]); }
   async listSubscriptions() { return (await this.q('select data from push_subscriptions')).rows.map((r) => r.data); }

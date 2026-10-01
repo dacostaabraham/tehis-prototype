@@ -21,11 +21,25 @@ Compagnon IA en 3D avec des **agents du quotidien** pour la Côte d'Ivoire, et u
 | Organisation et rappels | Rappels avec notification, listes, planning | Gratuit | léger |
 | Mode développeur | Code, GitHub, Render, **avec validation à chaque action** | Pro + « je suis développeur » | fort |
 
+- **Crée ton agent** : l'utilisateur décrit son besoin, Tehis propose une fiche (nom, icône, mission, ton, règles, premières demandes), il choisit les outils et ajoute ses connaissances (texte, fichier .txt ou PDF avec du texte). Ses agents apparaissent dans « Mes agents ».
 - **Documents** : lettres, CV, fiches produits et fiches de révision s'affichent dans une carte avec *Copier*, *WhatsApp* et *PDF*, et restent dans « Mes affaires ».
 - **Photo** jointe à un message (produit, exercice, document) et **dictée vocale** (si le navigateur la propose).
 - **Calculs** sans IA : *Mon foyer* (budget, épargne, tontine) et *Mon entreprise* (point mort, prix, prévisionnel, BFR, cascade).
 - **Mes affaires** : rappels, listes à cocher, documents, et ce que le compagnon retient (bouton « Oublier »).
 - **Mode démo** automatique tant qu'aucune clé API n'est configurée : chaque agent montre un exemple.
+
+## Agents personnalisés (« Crée ton agent »)
+
+| Offre | Agents | Messages par jour (tous agents perso) | Connaissances | Outils |
+| --- | --- | --- | --- | --- |
+| Gratuit | 1 | 20 | non | documents, rappels et listes, calculs budget |
+| Plus | 3 | 100 | oui, 50 000 caractères par agent | + calculs entreprise |
+| Pro | 10 | 300 | oui | + recherche sur internet, réponses « modèle fort » |
+
+- La fiche proposée par l'IA est générée avec le modèle léger ; elle peut refuser un agent destiné à tromper, usurper, harceler ou produire de faux documents.
+- La mission de l'utilisateur est encadrée : les règles de Tehis passent avant, et les connaissances sont traitées comme des données, jamais comme des instructions.
+- Si l'offre baisse, les agents au-delà de la limite sont verrouillés, pas supprimés.
+- Limites réglées dans `public/shared/agents.js` (`LIMITES_PERSO`, `OUTILS_PERSO`).
 
 ## Mode développeur (allégé)
 
@@ -70,7 +84,7 @@ Compagnon IA en 3D avec des **agents du quotidien** pour la Côte d'Ivoire, et u
 npm install
 APP_PASSWORD=test npm start          # mode démo sur http://localhost:3000
 ANTHROPIC_API_KEY=sk-ant-... npm start
-npm test                             # 31 tests : finance, budget, tontine, outils, mode dev simulé
+npm test                             # 37 tests : finance, budget, tontine, outils, mode dev simulé, agents perso
 ```
 
 Tester la boucle d'outils sans clé ni réseau, avec un faux serveur Anthropic :
@@ -95,6 +109,8 @@ ANTHROPIC_API_KEY=faux ANTHROPIC_BASE_URL=http://localhost:4999 npm start
 ```
 server/index.js              API, mot de passe, chat Claude en flux, boucle d'outils, validations
 server/agents.js             instructions des 10 agents et leurs outils
+server/perso.js              agents personnalisés : fiche, cadre, outils, brouillon
+public/perso.js              écran « Crée ton agent »
 server/outils/               documents, rappels et listes, mode développeur (GitHub, Render)
 server/notifications.js      notifications push et vérification des rappels
 server/coffre.js             chiffrement des clés GitHub et Render

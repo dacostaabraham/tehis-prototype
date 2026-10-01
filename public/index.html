@@ -151,6 +151,50 @@
       <div class="calc-actions"><button class="btn accent" type="button" id="dlg-dev-ok">Oui, je suis développeur</button><button class="btn" type="button" data-fermer>Annuler</button></div>
     </dialog>
 
+    <dialog id="dlg-perso" class="sheet perso-sheet" aria-labelledby="perso-titre">
+      <div class="sheet-head"><h2 id="perso-titre">Crée ton agent</h2><button type="button" class="icon-btn" data-fermer aria-label="Fermer">✕</button></div>
+      <ol class="etapes" aria-label="Étapes"><li data-etape="1">Ton besoin</li><li data-etape="2">Sa fiche</li><li data-etape="3">Ses outils</li></ol>
+
+      <section data-panneau="1" class="perso-panneau">
+        <label for="perso-desc">Que doit faire ton agent ?</label>
+        <textarea id="perso-desc" rows="5" maxlength="1500" placeholder="Ex. : Je tiens un salon de coiffure à Yopougon. Je veux un agent qui conseille mes clientes sur les coiffures, donne mes tarifs et prépare les messages de rappel de rendez-vous."></textarea>
+        <p class="muted small">Donne les détails utiles : pour qui, où, tes prix, tes horaires, tes produits.</p>
+        <div class="suggestions perso-exemples" id="perso-exemples"></div>
+        <p id="perso-err1" class="error small" role="alert" hidden></p>
+        <div class="calc-actions"><button class="btn accent" type="button" id="perso-proposer">Proposer une fiche</button><button class="btn small" type="button" id="perso-manuel">Remplir moi-même</button></div>
+      </section>
+
+      <section data-panneau="2" class="perso-panneau" hidden>
+        <div class="perso-ligne">
+          <div class="field icone-field"><label for="perso-icone">Icône</label><input id="perso-icone" type="text" maxlength="8" value="✨"></div>
+          <div class="field"><label for="perso-nom">Nom</label><input id="perso-nom" type="text" maxlength="40"></div>
+        </div>
+        <label for="perso-resume">En une phrase</label>
+        <input id="perso-resume" type="text" maxlength="120">
+        <label for="perso-mission">Sa mission</label>
+        <textarea id="perso-mission" rows="7" maxlength="3000"></textarea>
+        <label for="perso-ton">Ton</label>
+        <select id="perso-ton"></select>
+        <label for="perso-regles">Règles (une par ligne)</label>
+        <textarea id="perso-regles" rows="3"></textarea>
+        <label for="perso-suggestions">Premières demandes proposées (une par ligne)</label>
+        <textarea id="perso-suggestions" rows="3"></textarea>
+        <p id="perso-err2" class="error small" role="alert" hidden></p>
+        <div class="calc-actions"><button class="btn small" type="button" data-aller="1">Retour</button><button class="btn accent" type="button" id="perso-suivant">Suivant</button></div>
+      </section>
+
+      <section data-panneau="3" class="perso-panneau" hidden>
+        <div class="groupe">Outils</div>
+        <div id="perso-outils" class="perso-outils"></div>
+        <label class="coche" id="perso-fort-ligne"><input type="checkbox" id="perso-fort"><span>Réponses plus poussées (modèle fort)</span></label>
+        <div class="groupe">Connaissances</div>
+        <div id="perso-savoir"></div>
+        <p id="perso-err3" class="error small" role="alert" hidden></p>
+        <div class="calc-actions"><button class="btn small" type="button" data-aller="2">Retour</button><button class="btn accent" type="button" id="perso-enregistrer">Créer l'agent</button></div>
+        <button class="btn small danger" type="button" id="perso-supprimer" hidden>Supprimer cet agent</button>
+      </section>
+    </dialog>
+
     <dialog id="dlg-doc" class="sheet doc-sheet" aria-labelledby="dlg-doc-titre">
       <div class="sheet-head"><h2 id="dlg-doc-titre"></h2><button type="button" class="icon-btn" data-fermer aria-label="Fermer">✕</button></div>
       <div id="dlg-doc-corps" class="doc-corps"></div>

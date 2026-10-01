@@ -235,3 +235,33 @@ select { width: 100%; min-height: 46px; padding: 10px 12px; border-radius: 12px;
 .panel.scroll > * { flex-shrink: 0; }
 .app.compact .agent-btn { display: none; }
 .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Crée ton agent */
+.agent-ligne.perso { padding: 0; gap: 0; }
+.agent-ligne.perso .agent-ouvrir { display: flex; align-items: center; gap: 12px; flex-grow: 1; min-width: 0; text-align: left; border: 0; background: transparent; padding: 10px 12px; min-height: 60px; }
+.agent-ligne.perso .agent-modifier { flex-shrink: 0; border: 0; border-left: 1px solid var(--line); background: transparent; color: var(--accent); font-weight: 600; font-size: 13px; padding: 0 14px; align-self: stretch; }
+.agent-ligne.verrou { opacity: .6; }
+.agent-ligne.creer { border-style: dashed; border-color: var(--accent); }
+.agent-ligne.creer .agent-icone { color: var(--accent); font-weight: 700; }
+.etapes { display: flex; gap: 6px; list-style: none; padding: 0; margin: 4px 0 14px; counter-reset: etape; }
+.etapes li { flex: 1; font-size: 12px; font-weight: 600; color: var(--muted); padding-top: 8px; border-top: 3px solid var(--line); counter-increment: etape; }
+.etapes li::before { content: counter(etape) '. '; }
+.etapes li.actif { color: var(--accent); border-color: var(--accent); }
+.etapes li.fait { color: var(--ink); border-color: var(--accent-soft); }
+.perso-panneau { display: flex; flex-direction: column; gap: 8px; }
+.perso-panneau textarea { resize: vertical; }
+.perso-ligne { display: flex; gap: 10px; }
+.perso-ligne .field { display: flex; flex-direction: column; gap: 4px; flex-grow: 1; min-width: 0; }
+.perso-ligne .icone-field { flex: 0 0 72px; }
+.perso-ligne .icone-field input { text-align: center; font-size: 22px; }
+.perso-exemples { padding: 0; }
+.perso-outils { display: flex; flex-direction: column; gap: 4px; }
+.coche.outil { align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.coche.outil input { margin-top: 2px; flex-shrink: 0; }
+.coche.outil.verrou { opacity: .65; }
+.coche .badge { background: var(--surface-2); color: var(--muted); font-size: 11px; }
+.savoir-ajout { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.fichier-btn { display: inline-flex; align-items: center; cursor: pointer; text-transform: none; letter-spacing: 0; color: var(--ink); font-weight: 600; }
+#perso-supprimer { margin-top: 10px; align-self: flex-start; }
+.coche.outil input:checked + span { text-decoration: none; color: inherit; }
+.perso-sheet .item-list { padding-left: 0; }

@@ -2,12 +2,30 @@
 import { mountCompanion, ESPECES, HUMEURS } from './companion.js';
 import { cascadeRentabilite, pointMort, fixerPrix, projection12Mois, estimationBFR, EXEMPLES_COURS } from './shared/finance.js';
 import { budgetMensuel, planEpargne, tontine, EXEMPLES_BUDGET } from './shared/budget.js';
-import { AGENTS, GROUPES, NOMS_OFFRES, accesAgent } from './shared/agents.js';
+import { AGENTS, GROUPES, NOMS_OFFRES, accesAgent as accesCatalogue, estPerso } from './shared/agents.js';
+import { initPerso, ouvrirCreation, ouvrirEdition } from './perso.js';
 import { markdown, echapper } from './shared/markdown.js';
 import { carteResultat, carteDocument, carteSuggestion, carteOffreDev, carteValidation, noteActivite, blocSources, blocListe, brancherListes, actionsDocument, dateFr } from './cards.js';
 
 const $ = (s) => document.querySelector(s);
-const etat = { agent: 'compagnon', profil: {}, statut: {}, compagnon: null, envoi: false, photo: null };
+const etat = { agent: 'compagnon', profil: {}, statut: {}, compagnon: null, envoi: false, photo: null, persos: { agents: [], limites: { agents: 1 }, offre: 'gratuit' } };
+
+/* Agents de Tehis et agents créés par l'utilisateur (« perso:<id> »). */
+const fichePerso = (id) => etat.persos.agents.find((a) => `perso:${a.id}` === id);
+function accesAgent(id, profil) {
+  if (!estPerso(id)) return accesCatalogue(id, profil);
+  const f = fichePerso(id);
+  if (!f) return { ok: false, raison: 'Agent introuvable.' };
+  return f.verrouille ? { ok: false, raison: 'Agent verrouillé avec ton offre actuelle.' } : { ok: true };
+}
+function metaAgent(id) {
+  if (!estPerso(id)) return AGENTS[id];
+  const f = fichePerso(id);
+  return { nom: f.nom, icone: f.icone, resume: f.resume, intro: `Je suis ${f.nom}. ${f.resume}`, suggestions: f.suggestions.length ? f.suggestions : ['Présente-toi', 'Que peux-tu faire pour moi ?'] };
+}
+async function chargerPersos() {
+  try { etat.persos = await api('/api/persos'); } catch { /* garde l'état précédent */ }
+}
 
 const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* stockage plein ou indisponible */ } };
@@ -70,6 +88,7 @@ async function ouvrirApp() {
   } else {
     await etat.compagnon.setSpecies(etat.profil.espece || 'chat');
   }
+  await chargerPersos();
   const memorise = lsGet('tehis_agent', 'compagnon');
   choisirAgent(accesAgent(memorise, etat.profil).ok ? memorise : 'compagnon');
   const panneau = new URLSearchParams(location.search).get('panneau');
@@ -106,14 +125,44 @@ $('#agent-btn').addEventListener('click', () => {
       });
       zone.appendChild(b);
     }
+    if (g.id === 'base') ajouterMesAgents(zone);
   }
   $('#sheet-agents').showModal();
+});
+
+function ajouterMesAgents(zone) {
+  const { agents, limites } = etat.persos;
+  zone.insertAdjacentHTML('beforeend', `<div class="groupe">Mes agents <span class="muted">· ${agents.length}/${limites.agents}</span></div>`);
+  for (const f of agents) {
+    const id = `perso:${f.id}`;
+    const ligne = document.createElement('div');
+    ligne.className = `agent-ligne perso${id === etat.agent ? ' actif' : ''}${f.verrouille ? ' verrou' : ''}`;
+    ligne.innerHTML = `<button type="button" class="agent-ouvrir"><span class="agent-icone" aria-hidden="true">${echapper(f.icone)}</span><span class="agent-texte"><strong>${echapper(f.nom)}</strong><span class="small muted">${echapper(f.verrouille ? 'Verrouillé avec ton offre actuelle' : f.resume)}</span></span></button><button type="button" class="agent-modifier" aria-label="Modifier ${echapper(f.nom)}">Modifier</button>`;
+    ligne.querySelector('.agent-ouvrir').onclick = () => { if (f.verrouille) return; fermerDialogues(); choisirAgent(id); ouvrirPanneau('chat'); };
+    ligne.querySelector('.agent-modifier').onclick = () => { fermerDialogues(); ouvrirEdition(f, etat.persos); };
+    zone.appendChild(ligne);
+  }
+  const creer = document.createElement('button');
+  creer.type = 'button';
+  creer.className = 'agent-ligne creer';
+  creer.innerHTML = `<span class="agent-icone" aria-hidden="true">＋</span><span class="agent-texte"><strong>Crée ton agent</strong><span class="small muted">Décris ton besoin, Tehis prépare l'agent</span></span>`;
+  creer.onclick = () => { fermerDialogues(); ouvrirCreation(etat.persos); };
+  zone.appendChild(creer);
+}
+
+initPerso({
+  api,
+  async apres(agent) {
+    await chargerPersos();
+    if (agent) { choisirAgent(`perso:${agent.id}`); ouvrirPanneau('chat'); }
+    else if (!accesAgent(etat.agent, etat.profil).ok) choisirAgent('compagnon');
+  }
 });
 
 function choisirAgent(agent) {
   etat.agent = agent;
   lsSet('tehis_agent', agent);
-  const a = AGENTS[agent];
+  const a = metaAgent(agent);
   $('#agent-icone').textContent = a.icone;
   $('#agent-nom').textContent = agent === 'compagnon' ? (etat.profil.nomCompagnon || 'Compagnon') : a.nom;
   $('#input').placeholder = agent === 'compagnon' ? `Écris à ${etat.profil.nomCompagnon || 'ton compagnon'}…` : 'Ton message…';
@@ -159,7 +208,7 @@ function afficherHistorique() {
   const zone = $('#messages');
   zone.innerHTML = '';
   const items = lsGet(cleHisto(), []);
-  const a = AGENTS[etat.agent];
+  const a = metaAgent(etat.agent);
   if (!items.length) {
     ajouterBulle('bot', etat.agent === 'compagnon'
       ? `Salut${etat.profil.prenom ? ` ${etat.profil.prenom}` : ''} ! Moi c'est ${etat.profil.nomCompagnon || 'Kiki'}. De quoi veux-tu parler ? Touche mon nom en haut pour choisir un agent spécialisé.`
@@ -550,7 +599,7 @@ $('#dev-cles-effacer').addEventListener('click', async () => {
 });
 $('#reg-effacer').addEventListener('click', () => {
   if (!confirm('Effacer toutes les discussions enregistrées sur ce téléphone ?')) return;
-  Object.keys(AGENTS).forEach((a) => { try { localStorage.removeItem(cleHisto(a)); } catch { /* rien */ } });
+  [...Object.keys(AGENTS), ...etat.persos.agents.map((f) => `perso:${f.id}`)].forEach((a) => { try { localStorage.removeItem(cleHisto(a)); } catch { /* rien */ } });
   afficherHistorique();
 });
 

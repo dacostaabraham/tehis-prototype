@@ -23,7 +23,7 @@ const INTROS = {
   dev: "Mode démo : le mode développeur a besoin de la clé API, puis de tes clés GitHub et Render dans les réglages. Il écrit le code, l'envoie sur ton dépôt et déploie sur Render, toujours après ta validation."
 };
 
-export async function reponseDemo(agent, message, { nomCompagnon, send, store }) {
+export async function reponseDemo(agent, message, { nomCompagnon, send, store, fiche }) {
   const texte = (message || '').toLowerCase();
   const nom = nomCompagnon || 'Kiki';
   let intro = '';
@@ -31,7 +31,9 @@ export async function reponseDemo(agent, message, { nomCompagnon, send, store })
   let document = null;
   let organisation = null;
 
-  if (agent === 'finance') {
+  if (fiche) {
+    intro = `Mode démo : je suis « ${fiche.nom} ». Ma mission : ${fiche.resume} Dès que la clé API sera active, je répondrai en suivant la mission et les règles que tu m'as données.`;
+  } else if (agent === 'finance') {
     if (/point mort|seuil|rentab/.test(texte)) {
       outil = { name: 'calcul_point_mort', input: EXEMPLES_COURS.point_mort, fn: pointMort };
       intro = "Mode démo : je reprends l'exemple d'Assist Bureau (prix 50 000 FCFA, 40 % de coûts variables, 800 000 FCFA de charges fixes).";

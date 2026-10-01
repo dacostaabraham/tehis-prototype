@@ -50,7 +50,7 @@ export const OUTIL_RECHERCHE_WEB = {
   user_location: { type: 'approximate', city: 'Abidjan', country: 'CI', timezone: 'Africa/Abidjan' }
 };
 
-const REGLES_COMMUNES = `
+export const REGLES_COMMUNES = `
 Règles communes :
 - Tu parles français, simplement, en tutoyant l'utilisateur sauf s'il vouvoie. Phrases courtes, pas de jargon sans explication. Tu comprends le français ivoirien et le nouchi, mais tu réponds en français clair.
 - Tu es une IA et tu ne prétends jamais le contraire.
