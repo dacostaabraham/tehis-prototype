@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tehis</title>
+  <meta name="description" content="Ton compagnon IA et ses agents du quotidien">
+  <meta name="theme-color" content="#0E7C86">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    } }
+  </script>
+</head>
+<body>
+  <!-- Connexion -->
+  <main id="view-login" class="view center" hidden>
+    <form id="login-form" class="card narrow" autocomplete="on">
+      <div class="brand-big">Tehis<span>.</span></div>
+      <p class="muted">Prototype privé. Entre le mot de passe de test.</p>
+      <label for="password">Mot de passe</label>
+      <input id="password" name="password" type="password" required autocomplete="current-password">
+      <p id="login-error" class="error" role="alert" hidden></p>
+      <button class="btn primary" type="submit">Entrer</button>
+    </form>
+  </main>
+
+  <!-- Choix du compagnon -->
+  <main id="view-setup" class="view" hidden>
+    <div class="setup">
+      <h1>Choisis ton compagnon</h1>
+      <p class="muted">Il t'accompagnera dans l'app. Tu pourras le changer plus tard.</p>
+      <div id="species-grid" class="species-grid" role="radiogroup" aria-label="Espèce"></div>
+      <label for="pet-name">Son nom</label>
+      <input id="pet-name" type="text" maxlength="16" value="Kiki">
+      <label for="first-name">Ton prénom</label>
+      <input id="first-name" type="text" maxlength="30" placeholder="Abraham">
+      <button id="setup-done" class="btn primary" type="button">Adopter mon compagnon</button>
+    </div>
+  </main>
+
+  <!-- Application -->
+  <main id="view-app" class="view app" hidden>
+    <header class="topbar">
+      <div class="brand">Tehis<span>.</span></div>
+      <span id="demo-badge" class="badge warn" hidden>Mode démo</span>
+      <button id="btn-settings" class="icon-btn" type="button" aria-label="Réglages">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg>
+      </button>
+    </header>
+
+    <section class="stage" id="stage" aria-label="Ton compagnon">
+      <span id="mood-label" class="mood">Au repos</span>
+      <button type="button" id="agent-btn" class="agent-btn" aria-haspopup="dialog" aria-label="Changer d'agent">
+        <span id="agent-icone" aria-hidden="true">🐾</span><span id="agent-nom">Compagnon</span>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+      </button>
+    </section>
+
+    <section id="panel-chat" class="panel" aria-label="Discussion">
+      <div id="messages" class="messages" aria-live="polite"></div>
+      <div id="suggestions" class="suggestions"></div>
+      <div id="piece-jointe" class="piece-jointe" hidden><img id="piece-img" alt="Photo jointe"><span>Photo jointe</span><button type="button" id="piece-retirer" aria-label="Retirer la photo">Retirer</button></div>
+      <form id="composer" class="composer">
+        <input id="photo-input" type="file" accept="image/*" hidden>
+        <button id="btn-photo" class="tool-btn" type="button" aria-label="Joindre une photo">
+          <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.5"></circle></svg>
+        </button>
+        <label for="input" class="sr-only">Message</label>
+        <textarea id="input" rows="1" placeholder="Écris à ton compagnon…"></textarea>
+        <button id="btn-micro" class="tool-btn" type="button" aria-label="Dicter un message" hidden>
+          <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg>
+        </button>
+        <button id="send" class="send" type="submit" aria-label="Envoyer">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+        </button>
+      </form>
+    </section>
+
+    <section id="panel-calc" class="panel scroll" aria-label="Calculs financiers" hidden>
+      <div class="seg" id="calc-groupes" role="tablist" aria-label="Type de calcul"><button role="tab" data-groupe="foyer">Mon foyer</button><button role="tab" data-groupe="entreprise">Mon entreprise</button></div>
+      <div class="calc-tabs" id="calc-tabs" role="tablist" aria-label="Calcul"></div>
+      <form id="calc-form" class="calc-form"></form>
+      <div id="calc-result"></div>
+    </section>
+
+    <section id="panel-affaires" class="panel scroll" aria-label="Mes affaires" hidden>
+      <h2>Mes affaires</h2>
+      <h3 class="sec">Rappels à venir</h3>
+      <ul id="rappels-list" class="item-list"></ul>
+      <h3 class="sec">Listes</h3>
+      <div id="listes-zone" class="listes"></div>
+      <h3 class="sec">Documents</h3>
+      <ul id="docs-list" class="item-list"></ul>
+      <h3 class="sec">Ce que ton compagnon retient</h3>
+      <p class="muted small">Tout ce qu'il a enregistré sur toi et ton activité. Tu peux l'effacer à tout moment.</p>
+      <ul id="memory-list" class="item-list"></ul>
+    </section>
+
+    <section id="panel-reglages" class="panel scroll" aria-label="Réglages" hidden>
+      <h2>Réglages</h2>
+      <div class="reglage">
+        <div><strong>Ton compagnon</strong><p class="muted small" id="reg-compagnon"></p></div>
+        <button class="btn small" type="button" id="reg-changer">Changer</button>
+      </div>
+      <div class="reglage">
+        <div><strong>Offre</strong><p class="muted small" id="reg-offre"></p></div>
+      </div>
+      <div class="reglage">
+        <div><strong>Notifications</strong><p class="muted small" id="reg-notif">Pour recevoir tes rappels, même app fermée.</p></div>
+        <button class="btn small" type="button" id="reg-notif-btn">Activer</button>
+      </div>
+      <div class="reglage col">
+        <div class="ligne"><div><strong>Mode développeur</strong><p class="muted small" id="reg-dev-etat">Pour les développeurs : écrire du code, l'envoyer sur GitHub et déployer sur Render.</p></div>
+        <button class="btn small" type="button" id="reg-dev-btn">Activer</button></div>
+        <form id="dev-cles" class="dev-cles" hidden>
+          <label for="cle-github">Clé GitHub (fine-grained token)</label>
+          <input id="cle-github" type="password" autocomplete="off" placeholder="github_pat_…">
+          <p class="muted small">GitHub › Settings › Developer settings › Fine-grained tokens. Droits : Contents et Administration en lecture/écriture, sur les dépôts choisis.</p>
+          <label for="cle-render">Clé API Render</label>
+          <input id="cle-render" type="password" autocomplete="off" placeholder="rnd_…">
+          <p class="muted small">Render › Account Settings › API Keys. Les clés sont vérifiées puis chiffrées sur le serveur ; elles ne sont jamais montrées à l'IA.</p>
+          <p id="dev-cles-msg" class="small" role="status"></p>
+          <div class="calc-actions"><button class="btn accent small" type="submit">Enregistrer les clés</button><button class="btn small" type="button" id="dev-cles-effacer">Effacer les clés</button></div>
+        </form>
+      </div>
+      <div class="reglage">
+        <div><strong>Discussions</strong><p class="muted small">Efface l'historique enregistré sur ce téléphone.</p></div>
+        <button class="btn small danger" type="button" id="reg-effacer">Effacer</button>
+      </div>
+      <p class="muted small" id="reg-version"></p>
+    </section>
+
+    <dialog id="sheet-agents" class="sheet" aria-labelledby="sheet-titre">
+      <div class="sheet-head"><h2 id="sheet-titre">Choisis un agent</h2><button type="button" class="icon-btn" data-fermer aria-label="Fermer">✕</button></div>
+      <div id="agents-liste"></div>
+    </dialog>
+
+    <dialog id="dlg-dev" class="sheet" aria-labelledby="dlg-dev-titre">
+      <h2 id="dlg-dev-titre">Activer le mode développeur ?</h2>
+      <p>Ce mode est fait pour les développeurs. Ton compagnon pourra :</p>
+      <ul><li>lire et écrire du code dans tes dépôts GitHub ;</li><li>créer et déployer des services sur Render.</li></ul>
+      <p>Chaque envoi de code ou déploiement te sera montré et attendra ta validation. Tu devras ajouter tes clés GitHub et Render.</p>
+      <div class="calc-actions"><button class="btn accent" type="button" id="dlg-dev-ok">Oui, je suis développeur</button><button class="btn" type="button" data-fermer>Annuler</button></div>
+    </dialog>
+
+    <dialog id="dlg-doc" class="sheet doc-sheet" aria-labelledby="dlg-doc-titre">
+      <div class="sheet-head"><h2 id="dlg-doc-titre"></h2><button type="button" class="icon-btn" data-fermer aria-label="Fermer">✕</button></div>
+      <div id="dlg-doc-corps" class="doc-corps"></div>
+      <div id="dlg-doc-actions" class="doc-actions"></div>
+    </dialog>
+
+    <nav class="bottomnav" aria-label="Navigation">
+      <button data-panel="chat" aria-current="page">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"></path></svg>Discuter</button>
+      <button data-panel="calc">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"></rect><path d="M8 7h8M8 12h2M12 12h2M16 12h0M8 16h2M12 16h2M16 16h0"></path></svg>Calculs</button>
+      <button data-panel="affaires">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2z"></path><path d="M8 7h6M8 11h6M8 15h4"></path></svg>Mes affaires</button>
+    </nav>
+  </main>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
