@@ -71,6 +71,12 @@ export const AGENTS = {
     intro: "Je te donne des infos santé pratiques pour la vie de tous les jours : que faire en cas de fièvre, où trouver une pharmacie de garde, quand aller au centre de santé. Je ne fais pas de diagnostic, je t'oriente vers un pro.",
     suggestions: ['Que faire en cas de fièvre chez un enfant ?', 'Pharmacie de garde près de moi ce soir', 'Quand faut-il aller au centre de santé ?', 'Rappelle-moi de prendre mon traitement à 8 h']
   },
+  logement: {
+    nom: 'Logement et déménagement', icone: '🏠', groupe: 'quotidien', offre: 'plus', modele: 'leger',
+    resume: 'Recherche, visite, bail, caution, déménagement à Abidjan',
+    intro: "Je t'aide à trouver un logement à Abidjan sans te faire avoir : où chercher, que vérifier en visite, bail et caution, et organisation du déménagement.",
+    suggestions: ['Checklist pour visiter un studio à Cocody', 'Que vérifier avant de payer la caution ?', 'Modèle de reçu de caution', 'Organise mon déménagement']
+  },
   dev: {
     nom: 'Mode développeur', icone: '⌨️', groupe: 'dev', offre: 'pro', modele: 'fort', developpeur: true,
     resume: 'Code, GitHub et déploiement Render, avec ta validation',
