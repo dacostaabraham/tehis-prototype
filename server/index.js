@@ -372,11 +372,18 @@ app.post('/api/chat', limite, async (req, res) => {
     send('mood', { mood: 'fete' });
     send('done', { usage, modele });
   } catch (e) {
-    console.error('Erreur chat :', e?.status, e?.message);
-    const msg = e?.status === 401 ? 'La clé API est refusée : vérifie ANTHROPIC_API_KEY dans Render.'
-      : e?.status === 429 ? 'Trop de demandes vers l\'IA en ce moment. Réessaie dans une minute.'
-      : e?.status === 404 ? `Le modèle « ${modele} » est introuvable : vérifie les variables ANTHROPIC_MODEL dans Render.`
-      : e?.status === 400 && /image/i.test(e?.message || '') ? 'La photo n\'a pas pu être lue. Essaie avec une autre image.'
+    // L'utilisateur voit un message simple ; le détail technique part dans les journaux Render pour l'équipe.
+    const texte = e?.message || '';
+    const panneAdmin = /credit balance|billing|purchase credits/i.test(texte) ? 'CRÉDIT ANTHROPIC ÉPUISÉ : recharger sur console.anthropic.com (Billing)'
+      : e?.status === 401 ? 'CLÉ API REFUSÉE : vérifier ANTHROPIC_API_KEY dans Render'
+      : e?.status === 404 ? `MODÈLE INTROUVABLE (${modele}) : vérifier ANTHROPIC_MODEL et ANTHROPIC_MODEL_LEGER`
+      : e?.status === 403 ? 'ACCÈS REFUSÉ PAR ANTHROPIC : vérifier les droits de la clé et de l\'organisation'
+      : null;
+    if (panneAdmin) console.error(`[ALERTE ADMIN] ${panneAdmin} · détail : ${e?.status} ${texte}`);
+    else console.error('Erreur chat :', e?.status, texte);
+    const msg = panneAdmin ? `${p.nomCompagnon || 'Ton compagnon'} fait une petite pause. Réessaie dans quelques minutes ; les calculs et « Mes affaires » restent disponibles.`
+      : e?.status === 429 || e?.status === 529 ? 'Beaucoup de demandes en ce moment. Réessaie dans une minute.'
+      : e?.status === 400 && /image/i.test(texte) ? "La photo n'a pas pu être lue. Essaie avec une autre image."
       : 'Une erreur est survenue pendant la réponse. Réessaie.';
     send('error', { message: msg });
     send('mood', { mood: 'repos' });
