@@ -45,6 +45,16 @@ export function texteParle(md) {
     .replace(/\*\*|__|[*_]/g, '')
     .replace(/(\d)\s(?=\d{3}\b)/g, '$1')      // 25 000 -> 25000, lu « vingt-cinq mille »
     .replace(/\bFCFA\b/g, 'francs CFA')
+    .replace(/\bM\.(?=\s|$)/g, 'monsieur')
+    .replace(/\bMme(?=\s|$)/g, 'madame')
+    .replace(/\bMlle(?=\s|$)/g, 'mademoiselle')
+    .replace(/\bDr(?=\s|$)/g, 'docteur')
+    .replace(/\bPr(?=\s|$)/g, 'professeur')
+    .replace(/\bSt(?=\s|$)/g, 'saint')
+    .replace(/\bSte(?=\s|$)/g, 'sainte')
+    .replace(/\bSVP\b/gi, "s'il vous plaît")
+    .replace(/\bRDV\b/gi, 'rendez-vous')
+    .replace(/n°\s*/gi, 'numéro ')
     .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '')
     .replace(/\s+\n/g, '\n')
     .trim();
@@ -53,7 +63,27 @@ export function texteParle(md) {
 // Découpe en phrases : les longues lectures s'arrêtent parfois sur iPhone.
 function phrases(t) {
   return t.split(/(?<=[.!?…:;])\s+|\n+/).map((x) => x.trim()).filter(Boolean)
-    .flatMap((p) => (p.length > 220 ? p.match(/.{1,200}(\s|$)/g) : [p]));
+    .flatMap((p) => (p.length > 220 ? decouperLong(p) : [p]));
+}
+
+// Découpe un long passage en morceaux : on coupe de préférence après une
+// virgule ou un point-virgule pour des pauses naturelles, puis on regroupe.
+function decouperLong(p, max = 200) {
+  const morceaux = [];
+  let courant = '';
+  const pousser = () => { const c = courant.trim(); if (c) morceaux.push(c); courant = ''; };
+  const emietter = (s) => {
+    for (const m of s.match(new RegExp(`.{1,${max}}(\\s|$)`, 'g')) || []) {
+      const c = m.trim(); if (c) morceaux.push(c);
+    }
+  };
+  for (const segment of p.split(/(?<=[,;])\s+/).map((x) => x.trim()).filter(Boolean)) {
+    if (segment.length > max) { pousser(); emietter(segment); }
+    else if ((courant + ' ' + segment).trim().length > max) { pousser(); courant = segment; }
+    else courant = `${courant} ${segment}`.trim();
+  }
+  pousser();
+  return morceaux.length ? morceaux : [p];
 }
 
 let session = 0;

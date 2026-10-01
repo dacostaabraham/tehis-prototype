@@ -106,6 +106,19 @@ export async function mountCompanion(container, especeInitiale) {
   }
   await chargerEspece(espece);
 
+  // Précharge les autres espèces en arrière-plan : le changement d'animal devient instantané.
+  const precharger = () => {
+    for (const { id } of ESPECES) {
+      if (id !== espece && !cache[id]) {
+        cache[id] = loader.loadAsync(`/models/${id}.glb`)
+          .then((g) => g.scene)
+          .catch(() => { delete cache[id]; });
+      }
+    }
+  };
+  if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(precharger, { timeout: 8000 });
+  else setTimeout(precharger, 4000);
+
   // Rotation au doigt
   let rotY = -0.3, vitesse = 0, glisse = false, dernierX = 0;
   const el = renderer.domElement;
@@ -163,8 +176,16 @@ export async function mountCompanion(container, especeInitiale) {
     if (humeur === 'fete' && dh > 3.5) { humeur = 'repos'; container.dispatchEvent(new CustomEvent('mood', { detail: 'repos' })); }
 
     renderer.render(scene, camera);
-    requestAnimationFrame(tick);
+    if (visible) requestAnimationFrame(tick);
   }
+
+  // Suspend le rendu quand le compagnon sort de l'écran : économie de batterie.
+  let visible = true;
+  new IntersectionObserver((entrees) => {
+    const v = entrees.some((e) => e.isIntersecting);
+    if (v && !visible) { horloge.getDelta(); requestAnimationFrame(tick); } // ignore la durée de pause
+    visible = v;
+  }).observe(container);
   requestAnimationFrame(tick);
 
   return {
