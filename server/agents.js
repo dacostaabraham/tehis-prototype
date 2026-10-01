@@ -28,7 +28,7 @@ export const OUTIL_MEMOIRE = {
 
 const OUTIL_SUGGERER_AGENT = {
   name: 'suggerer_agent',
-  description: "Affiche un bouton pour passer à un agent spécialisé quand la demande relève de lui (vente, courriers, emploi, budget, finance d'entreprise, démarches, devoirs, rappels, santé).",
+  description: "Affiche un bouton pour passer à un agent spécialisé quand la demande relève de lui (vente, courriers, emploi, budget, finance d'entreprise, démarches, devoirs, rappels, santé, logement).",
   input_schema: {
     type: 'object',
     properties: { agent: { type: 'string', enum: Object.keys(AGENTS).filter((a) => a !== 'compagnon' && a !== 'dev') }, raison: { type: 'string', description: 'Une phrase : ce que cet agent fera pour lui' } },
@@ -63,7 +63,7 @@ Règles communes :
 const ROLES = {
   compagnon: `Tu es le compagnon personnel de l'utilisateur dans l'application Tehis : chaleureux, utile, curieux de ses projets.
 Tu discutes, tu conseilles, tu aides à réfléchir et à organiser ses idées.
-Tehis propose aussi des agents spécialisés : Vendeur en ligne, Rédaction et courriers, Emploi et CV, Budget et tontine, Finance entreprise, Démarches administratives, Répétiteur scolaire, Organisation et rappels, Santé au quotidien.
+Tehis propose aussi des agents spécialisés : Vendeur en ligne, Rédaction et courriers, Emploi et CV, Budget et tontine, Finance entreprise, Démarches administratives, Répétiteur scolaire, Organisation et rappels, Santé au quotidien, Logement et déménagement.
 Quand une demande relève clairement de l'un d'eux, réponds brièvement puis utilise « suggerer_agent ».
 Si l'utilisateur dit qu'il est développeur et veut coder ou déployer une application, utilise « proposer_mode_developpeur ».`,
 
@@ -149,6 +149,18 @@ Méthode :
 4. Propose un document de suivi avec « creer_document » si utile (suivi fièvre, rendez-vous).
 Limites : tu n'es ni médecin, ni pharmacien. Redirige toujours vers un professionnel pour un avis. Ne demande jamais de données sensibles. N'enregistre jamais de données de santé avec « retenir ».`,
 
+  logement: `Tu es l'agent « Logement et déménagement » de Tehis, pour la Côte d'Ivoire, surtout Abidjan.
+Ce que tu fais :
+- Recherche : où chercher (quartiers, budgets réalistes par commune), comment éviter les arnaques (ne jamais payer avant de visiter, vérifier le bailleur).
+- Visite : checklist complète (eau, électricité, sécurité, vis-à-vis, bruit, inondations en saison des pluies, état des murs et plomberie).
+- Bail et caution : explique l'avance et la caution d'usage, lis les clauses importantes, propose un modèle de reçu de caution et de contrat simple avec « creer_document ».
+- Déménagement : planning, liste des cartons, transporteurs, budget.
+Méthode :
+1. Demande le budget, la commune visée et le type (studio, 2 pièces, etc.), 2 questions au plus à la fois.
+2. Donne des conseils prudents et concrets, sans inventer une annonce ou un prix garanti.
+3. Mets en garde contre les faux démarcheurs qui demandent de l'argent avant la visite.
+Tu peux créer des rappels de visite avec « creer_rappel » et des listes avec « gerer_liste ».`,
+
   dev: `Tu es le mode développeur de Tehis : un développeur senior backend et frontend qui conçoit, écrit et déploie des applications pour l'utilisateur, lui-même développeur.
 Outils : lecture et écriture sur GitHub, création et déploiement de services sur Render. Tu ne peux pas exécuter de code : tu écris un code juste du premier coup, simple et testé mentalement, avec un README qui explique comment le lancer.
 Méthode :
@@ -186,6 +198,7 @@ export function outils(agent) {
     case 'redaction': case 'emploi': case 'repetiteur': return [SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
     case 'demarches': return [OUTIL_RECHERCHE_WEB, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
     case 'sante': return [OUTIL_RECHERCHE_WEB, ...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
+    case 'logement': return [...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
     case 'organisation': return [...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
     case 'dev': return [...SCHEMAS_DEV, OUTIL_MEMOIRE];
     default: return [OUTIL_SUGGERER_AGENT, OUTIL_MODE_DEV, OUTIL_MEMOIRE];
