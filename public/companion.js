@@ -8,11 +8,12 @@ export const ESPECES = [
   { id: 'tortue', nom: 'Tortue' }
 ];
 
-export const HUMEURS = { repos: 'Au repos', ecoute: 'Je réponds', reflechit: 'Je réfléchis', travaille: 'Je calcule', fete: 'Terminé !' };
+export const HUMEURS = { repos: 'Au repos', ecoute: 'Je réponds', reflechit: 'Je réfléchis', travaille: 'Je calcule', fete: 'Terminé !', parle: 'Je parle' };
 
 export async function mountCompanion(container, especeInitiale) {
   const reduit = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let humeur = 'repos';
+  let elan = 0; // impulsion donnée à chaque mot prononcé
   let debutHumeur = 0;
   let espece = especeInitiale;
 
@@ -23,8 +24,9 @@ export async function mountCompanion(container, especeInitiale) {
     div.innerHTML = `<img alt="" src="/pets/${espece}.jpg">`;
     container.appendChild(div);
     return {
-      setMood(m) { humeur = m; },
-      async setSpecies(e) { espece = e; div.querySelector('img').src = `/pets/${e}.jpg`; }
+      setMood(m) { humeur = m; div.classList.toggle('parle', m === 'parle'); },
+      async setSpecies(e) { espece = e; div.querySelector('img').src = `/pets/${e}.jpg`; },
+      impulsion() {}
     };
   };
 
@@ -129,6 +131,14 @@ export async function mountCompanion(container, especeInitiale) {
     const souffle = 1 + 0.028 * Math.sin(t * 2.1) * A;
     corps.scale.set(1 + (souffle - 1) * 0.4, souffle, 1 + (souffle - 1) * 0.4);
     let saut = 0, tour = 0;
+    elan *= Math.pow(0.02, dt);
+    if (humeur === 'parle') {
+      // Rythme de parole : syllabes rapides + accent à chaque mot.
+      const syllabes = Math.max(0, Math.sin(t * 13) * Math.sin(t * 5.3 + 1));
+      const k = (0.5 * syllabes + 0.9 * elan) * A;
+      corps.scale.set(1 + 0.03 * k, 1 + 0.06 * k, 1 + 0.03 * k);
+      saut = 0.06 * k;
+    }
     if (humeur === 'fete') { saut = Math.abs(Math.sin(t * 4.2)) * 0.4 * A * Math.max(0, 1 - dh / 3); tour = Math.min(1, dh / 1.2) * Math.PI * 2 * A; }
     if (humeur === 'travaille') saut = Math.abs(Math.sin(t * 9)) * 0.05 * A;
     racine.position.y = saut; racine.rotation.y = rotY + tour;
@@ -137,11 +147,12 @@ export async function mountCompanion(container, especeInitiale) {
     if (humeur === 'ecoute') rz = 0.1 * Math.sin(t * 2.4) * A;
     if (humeur === 'reflechit') { ry = 0.4 * Math.sin(t * 0.8) * A; rz = 0.06; rx = -0.05; }
     if (humeur === 'travaille') { rx = 0.08; rz = 0.03 * Math.sin(t * 9) * A; }
+    if (humeur === 'parle') { rx = -0.06 - 0.05 * elan * A; rz = 0.06 * Math.sin(t * 2.7) * A; ry = 0.12 * Math.sin(t * 1.1) * A; }
     corps.rotation.z = lerp(corps.rotation.z, rz, 0.08);
     corps.rotation.y = lerp(corps.rotation.y, ry, 0.08);
     corps.rotation.x = lerp(corps.rotation.x, rx, 0.08);
 
-    onde.visible = humeur === 'ecoute';
+    onde.visible = humeur === 'ecoute' || humeur === 'parle';
     if (onde.visible) { const k = (t * 0.8) % 1; onde.scale.setScalar(0.9 + k * 1.4); anneauMat.opacity = 0.8 * (1 - k); } else anneauMat.opacity = 0.8;
     points.visible = humeur === 'reflechit';
     if (points.visible) points.children.forEach((p, i) => { const a = t * 2.2 * (A || 0.001) + i * 2.1; p.position.set(Math.cos(a) * 0.55, 2.9 + Math.sin(t * 3 + i) * 0.06, Math.sin(a) * 0.55); });
@@ -158,6 +169,7 @@ export async function mountCompanion(container, especeInitiale) {
 
   return {
     setMood(m) { if (m !== humeur) { humeur = m; debutHumeur = horloge.elapsedTime; } },
-    setSpecies: chargerEspece
+    setSpecies: chargerEspece,
+    impulsion() { elan = Math.min(1, elan + 0.8); }
   };
 }

@@ -23,6 +23,7 @@ Compagnon IA en 3D avec des **agents du quotidien** pour la Côte d'Ivoire, et u
 
 - **Crée ton agent** : l'utilisateur décrit son besoin, Tehis propose une fiche (nom, icône, mission, ton, règles, premières demandes), il choisit les outils et ajoute ses connaissances (texte, fichier .txt ou PDF avec du texte). Ses agents apparaissent dans « Mes agents ».
 - **Documents** : lettres, CV, fiches produits et fiches de révision s'affichent dans une carte avec *Copier*, *WhatsApp* et *PDF*, et restent dans « Mes affaires ».
+- **Voix du compagnon** : il lit ses réponses à voix haute (voix française du téléphone, hauteur et débit selon l'espèce) et s'anime pendant qu'il parle (humeur « Je parle »). Bouton haut-parleur sur la scène pour couper ou remettre, bouton « Écouter » sous chaque réponse, test dans Réglages.
 - **Photo** jointe à un message (produit, exercice, document) et **dictée vocale** (si le navigateur la propose).
 - **Calculs** sans IA : *Mon foyer* (budget, épargne, tontine) et *Mon entreprise* (point mort, prix, prévisionnel, BFR, cascade).
 - **Mes affaires** : rappels, listes à cocher, documents, et ce que le compagnon retient (bouton « Oublier »).

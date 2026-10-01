@@ -58,6 +58,10 @@
 
     <section class="stage" id="stage" aria-label="Ton compagnon">
       <span id="mood-label" class="mood">Au repos</span>
+      <button type="button" id="btn-voix" class="voix-btn" aria-pressed="true" aria-label="Lecture à voix haute activée" hidden>
+        <svg class="on" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"></path><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"></path></svg>
+        <svg class="off" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"></path><path d="m17 9 5 6M22 9l-5 6"></path></svg>
+      </button>
       <button type="button" id="agent-btn" class="agent-btn" aria-haspopup="dialog" aria-label="Changer d'agent">
         <span id="agent-icone" aria-hidden="true">🐾</span><span id="agent-nom">Compagnon</span>
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
@@ -112,6 +116,10 @@
       </div>
       <div class="reglage">
         <div><strong>Offre</strong><p class="muted small" id="reg-offre"></p></div>
+      </div>
+      <div class="reglage" id="reg-voix-ligne">
+        <div><strong>Voix du compagnon</strong><p class="muted small" id="reg-voix">Lit les réponses à voix haute avec la voix française du téléphone.</p></div>
+        <button class="btn small" type="button" id="reg-voix-test">Tester</button>
       </div>
       <div class="reglage">
         <div><strong>Notifications</strong><p class="muted small" id="reg-notif">Pour recevoir tes rappels, même app fermée.</p></div>

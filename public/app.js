@@ -4,6 +4,7 @@ import { cascadeRentabilite, pointMort, fixerPrix, projection12Mois, estimationB
 import { budgetMensuel, planEpargne, tontine, EXEMPLES_BUDGET } from './shared/budget.js';
 import { AGENTS, GROUPES, NOMS_OFFRES, accesAgent as accesCatalogue, estPerso } from './shared/agents.js';
 import { initPerso, ouvrirCreation, ouvrirEdition } from './perso.js';
+import { voixDisponible, parler, arreter, debloquer } from './voix.js';
 import { markdown, echapper } from './shared/markdown.js';
 import { carteResultat, carteDocument, carteSuggestion, carteOffreDev, carteValidation, noteActivite, blocSources, blocListe, brancherListes, actionsDocument, dateFr } from './cards.js';
 
@@ -82,6 +83,7 @@ $('#setup-done').addEventListener('click', async () => {
 async function ouvrirApp() {
   montrer('app');
   $('#demo-badge').hidden = !etat.statut.modeDemo;
+  majBoutonVoix();
   if (!etat.compagnon) {
     etat.compagnon = await mountCompanion($('#stage'), etat.profil.espece || 'chat');
     $('#stage').addEventListener('mood', (e) => humeur(e.detail));
@@ -226,16 +228,50 @@ function afficherHistorique() {
   sug.innerHTML = '';
   for (const s of a.suggestions) {
     const b = document.createElement('button'); b.type = 'button'; b.textContent = s;
-    b.addEventListener('click', () => envoyer(s));
+    b.addEventListener('click', () => { debloquer(); envoyer(s); });
     sug.appendChild(b);
   }
   zone.scrollTop = zone.scrollHeight;
 }
 
+/* ---------- Voix ---------- */
+let lectureAuto = lsGet('tehis_voix', true);
+function majBoutonVoix() {
+  const b = $('#btn-voix');
+  b.hidden = !voixDisponible;
+  b.setAttribute('aria-pressed', String(lectureAuto));
+  b.setAttribute('aria-label', lectureAuto ? 'Lecture à voix haute activée' : 'Lecture à voix haute coupée');
+}
+$('#btn-voix').addEventListener('click', () => {
+  debloquer();
+  lectureAuto = !lectureAuto;
+  lsSet('tehis_voix', lectureAuto);
+  if (!lectureAuto) { arreter(); humeur('repos'); document.querySelectorAll('.ecouter.actif').forEach((x) => x.classList.remove('actif')); }
+  majBoutonVoix();
+});
+function lire(texte, bouton) {
+  debloquer();
+  document.querySelectorAll('.ecouter.actif').forEach((x) => x.classList.remove('actif'));
+  bouton?.classList.add('actif');
+  return parler(texte, etat.profil.espece, {
+    debut: () => humeur('parle'),
+    mot: () => etat.compagnon?.impulsion?.(),
+    fin: () => { bouton?.classList.remove('actif'); humeur('repos'); }
+  });
+}
+function boutonEcoute(bulle, texte) {
+  if (!voixDisponible || !texte?.trim() || bulle.querySelector('.ecouter')) return;
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'ecouter'; b.setAttribute('aria-label', 'Écouter cette réponse');
+  b.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"></path><path d="M16 9a4 4 0 0 1 0 6"></path></svg>Écouter';
+  b.onclick = () => { if (b.classList.contains('actif')) { arreter(); b.classList.remove('actif'); humeur('repos'); } else lire(texte, b); };
+  bulle.appendChild(b);
+}
+
 function ajouterBulle(qui, texte, photo) {
   const b = document.createElement('div');
   b.className = `msg ${qui}`;
-  if (qui === 'bot') b.innerHTML = markdown(texte);
+  if (qui === 'bot') { b.innerHTML = markdown(texte); boutonEcoute(b, texte); }
   else { b.textContent = texte; if (photo) b.insertAdjacentHTML('afterbegin', '<span class="photo-tag">📷 photo</span> '); }
   $('#messages').appendChild(b);
   return b;
@@ -246,6 +282,7 @@ input.addEventListener('input', () => { input.style.height = 'auto'; input.style
 input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(pointer: fine)').matches) { e.preventDefault(); $('#composer').requestSubmit(); } });
 $('#composer').addEventListener('submit', (e) => {
   e.preventDefault();
+  debloquer();
   const t = input.value.trim();
   if (!t && !etat.photo) return;
   input.value = ''; input.style.height = 'auto';
@@ -305,6 +342,8 @@ if (Reconnaissance) {
 async function envoyer(texte, { auto = false, agent = etat.agent } = {}) {
   while (etat.envoi) await new Promise((r) => setTimeout(r, 200));
   etat.envoi = true; $('#send').disabled = true;
+  arreter();
+  let aLire = '';
   const cle = cleHisto(agent);
   const items = lsGet(cle, []);
   const photo = auto ? null : etat.photo;
@@ -326,7 +365,11 @@ async function envoyer(texte, { auto = false, agent = etat.agent } = {}) {
   if (photo) conversation.at(-1).images = [photo];
   const ajouter = (it) => { items.push(it); if (visible) rendreItem(it, items); };
   const coupure = () => {
-    if (courant.trim()) items.push({ role: 'assistant', content: courant.trim() }); else bulle.remove();
+    if (courant.trim()) {
+      items.push({ role: 'assistant', content: courant.trim() });
+      boutonEcoute(bulle, courant.trim());
+      aLire += `${courant.trim()}\n\n`;
+    } else bulle.remove();
     courant = '';
   };
   const nouvelleBulle = () => { bulle = visible ? ajouterBulle('bot', '') : document.createElement('div'); bulle.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>'; };
@@ -375,6 +418,11 @@ async function envoyer(texte, { auto = false, agent = etat.agent } = {}) {
     }
     // L'historique garde au plus 80 éléments par agent sur le téléphone.
     lsSet(cle, items.slice(-80));
+    if (lectureAuto && visible && aLire.trim() && !auto) {
+      const derniere = [...zone.querySelectorAll('.msg.bot .ecouter')].at(-1);
+      lire(aLire, derniere);
+    }
+    zone.scrollTop = zone.scrollHeight;
   } catch (ex) {
     // Rien n'a été répondu : le message n'est pas gardé, on propose de le renvoyer.
     bulle.remove();
@@ -598,6 +646,11 @@ async function afficherReglages() {
   } else $('#reg-dev-etat').textContent = "Pour les développeurs : écrire du code, l'envoyer sur GitHub et déployer sur Render.";
 }
 $('#reg-changer').addEventListener('click', afficherSetup);
+$('#reg-voix-test').addEventListener('click', () => {
+  if (!voixDisponible) { $('#reg-voix').textContent = "Ce navigateur ne sait pas lire à voix haute."; return; }
+  $('#reg-voix').textContent = "Si tu n'entends rien sur iPhone, vérifie le volume et que le bouton silencieux n'est pas activé.";
+  lire(`Salut ${etat.profil.prenom || ''} ! Moi c'est ${etat.profil.nomCompagnon || 'Kiki'}. Voilà ma voix.`);
+});
 $('#reg-dev-btn').addEventListener('click', async () => {
   if (!etat.profil.developpeur) return ouvrirDialogueDev();
   etat.profil = await api('/api/profile', { method: 'PUT', body: JSON.stringify({ developpeur: false }) });

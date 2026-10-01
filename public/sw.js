@@ -1,7 +1,7 @@
 // Service worker : garde l'interface et les modèles 3D en cache, affiche les rappels (notifications push).
 // L'API passe toujours par le réseau.
-const CACHE = 'tehis-v3';
-const COQUILLE = ['/', '/index.html', '/styles.css', '/app.js', '/cards.js', '/perso.js', '/companion.js', '/charts.js', '/shared/finance.js', '/shared/budget.js', '/shared/agents.js', '/shared/markdown.js', '/manifest.webmanifest', '/icons/icon-192.png'];
+const CACHE = 'tehis-v4';
+const COQUILLE = ['/', '/index.html', '/styles.css', '/app.js', '/cards.js', '/perso.js', '/voix.js', '/companion.js', '/charts.js', '/shared/finance.js', '/shared/budget.js', '/shared/agents.js', '/shared/markdown.js', '/manifest.webmanifest', '/icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(COQUILLE)).then(() => self.skipWaiting()));
