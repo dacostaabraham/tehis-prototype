@@ -32,7 +32,12 @@ const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v ? JS
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* stockage plein ou indisponible */ } };
 
 async function api(path, options = {}) {
-  const r = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }, credentials: 'same-origin' });
+  let r;
+  try {
+    r = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }, credentials: 'same-origin' });
+  } catch (e) {
+    throw new Error('Pas de connexion : vérifie ton réseau puis réessaie.');
+  }
   if (r.status === 401 && path !== '/api/login') { montrer('login'); throw new Error('Connexion requise'); }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.erreur || `Erreur ${r.status}`);
@@ -333,7 +338,14 @@ if (Reconnaissance) {
     const base = input.value ? `${input.value.trim()} ` : '';
     rec.onresult = (ev) => { input.value = base + [...ev.results].map((r) => r[0].transcript).join(''); input.dispatchEvent(new Event('input')); };
     rec.onend = () => { rec = null; micro.classList.remove('actif'); micro.setAttribute('aria-label', 'Dicter un message'); };
-    rec.onerror = () => rec?.stop();
+    rec.onerror = (ev) => {
+      rec?.stop();
+      if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
+        const ph = input.placeholder;
+        input.placeholder = 'Micro refusé : autorise-le dans le navigateur pour dicter';
+        setTimeout(() => { input.placeholder = ph; }, 4000);
+      }
+    };
     micro.classList.add('actif'); micro.setAttribute('aria-label', 'Arrêter la dictée');
     rec.start();
   });
@@ -341,6 +353,10 @@ if (Reconnaissance) {
 
 async function envoyer(texte, { auto = false, agent = etat.agent } = {}) {
   while (etat.envoi) await new Promise((r) => setTimeout(r, 200));
+  if (!auto && !navigator.onLine) {
+    afficherErreur('Tu es hors ligne : reconnecte-toi puis réessaie.', () => envoyer(texte, { agent }));
+    return;
+  }
   etat.envoi = true; $('#send').disabled = true;
   arreter();
   let aLire = '';
@@ -714,4 +730,12 @@ async function demarrer() {
 }
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+/* Bandeau hors-ligne : l'interface reste utilisable grâce au cache, mais l'API exige le réseau. */
+const banniereHorsLigne = $('#offline-banner');
+function majHorsLigne() { if (banniereHorsLigne) banniereHorsLigne.hidden = navigator.onLine; }
+window.addEventListener('online', majHorsLigne);
+window.addEventListener('offline', majHorsLigne);
+majHorsLigne();
+
 demarrer().catch((e) => console.error(e));
