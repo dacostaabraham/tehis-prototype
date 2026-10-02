@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tehis · ton compagnon IA pour le business et le quotidien</title>
+  <meta name="description" content="Un compagnon IA en 3D qui t'aide à fixer tes prix, tenir ton budget, gérer ta tontine, écrire tes courriers et organiser ta semaine. En français, en FCFA. Bientôt en Côte d'Ivoire.">
+  <meta name="theme-color" content="#0E7C86">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Tehis · ton compagnon IA arrive bientôt">
+  <meta property="og:description" content="Prix, budget, tontine, courriers, rappels : un compagnon IA en français et en FCFA. Inscris-toi pour tester en avant-première.">
+  <meta property="og:image" content="{{ORIGINE}}/og.jpg">
+  <meta property="og:url" content="{{ORIGINE}}/">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="/icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+  <link rel="stylesheet" href="/site.css">
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    } }
+  </script>
+</head>
+<body>
+  <header class="nav">
+    <a class="marque" href="/">Tehis<span>.</span></a>
+    <a class="btn petit" href="#rejoindre">Rejoindre la liste</a>
+  </header>
+
+  <main>
+    <!-- Accroche -->
+    <section class="hero">
+      <div class="hero-texte">
+        <p class="kicker"><span class="point"></span>Bientôt en Côte d'Ivoire</p>
+        <h1>Ton compagnon IA pour le business et le quotidien.</h1>
+        <p class="chapo">Un petit compagnon en 3D qui t'aide à fixer tes prix, tenir ton budget, suivre ta tontine, écrire tes courriers et organiser ta semaine. En français, en FCFA, sur ton téléphone.</p>
+        <div class="actions">
+          <a class="btn" href="#rejoindre">Je veux tester Tehis</a>
+          <a class="btn secondaire" href="#agents">Voir ce qu'il fait</a>
+        </div>
+        <p class="preuve" id="preuve" hidden></p>
+      </div>
+      <div class="hero-scene">
+        <div class="scene" id="scene" aria-label="Compagnon Tehis en 3D. Fais-le tourner avec le doigt.">
+          <div class="bulle" id="bulle" aria-live="polite">Ton point mort : 27 clients par mois.</div>
+          <img class="repli" id="repli" src="/pets/chat.jpg" alt="" hidden>
+        </div>
+        <div class="especes" role="radiogroup" aria-label="Choisis ton compagnon">
+          <button type="button" role="radio" aria-checked="true" data-espece="chat">Chat</button>
+          <button type="button" role="radio" aria-checked="false" data-espece="perroquet">Perroquet</button>
+          <button type="button" role="radio" aria-checked="false" data-espece="elephant">Éléphant</button>
+          <button type="button" role="radio" aria-checked="false" data-espece="tortue">Tortue</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="public">
+      <p>Pensé pour les <strong>commerçantes</strong>, les <strong>vendeurs en ligne</strong>, les <strong>entrepreneurs</strong>, les <strong>étudiants</strong> et les <strong>familles</strong>.</p>
+    </section>
+
+    <!-- Agents -->
+    <section class="bloc" id="agents">
+      <p class="sur-titre">Ses agents</p>
+      <h2>Un spécialiste pour chaque tâche</h2>
+      <p class="intro">Ton compagnon t'oriente vers le bon agent. Chacun connaît la Côte d'Ivoire, parle en FCFA et fait ses calculs sans se tromper.</p>
+      <div class="grille-agents" id="grille-agents"></div>
+    </section>
+
+    <!-- Démo tontine -->
+    <section class="bloc demo" id="essayer">
+      <div class="demo-texte">
+        <p class="sur-titre">Essaie maintenant</p>
+        <h2>Ta tontine, en clair</h2>
+        <p class="intro">Combien tu reçois, quand, et si la tontine t'avance de l'argent ou te fait épargner pour les autres. C'est le même calcul que dans l'app.</p>
+      </div>
+      <form class="calcul" id="calcul-tontine">
+        <div class="champs">
+          <label>Membres<input type="number" name="membres" inputmode="numeric" min="2" max="100" value="10"></label>
+          <label>Cotisation (FCFA)<input type="number" name="cotisation" inputmode="numeric" min="100" step="500" value="25000"></label>
+          <label>Ton tour<input type="number" name="position" inputmode="numeric" min="1" value="3"></label>
+          <label>Fréquence<select name="frequence"><option value="mois">Chaque mois</option><option value="semaine">Chaque semaine</option><option value="quinzaine">Chaque quinzaine</option><option value="jour">Chaque jour</option></select></label>
+        </div>
+        <div class="resultat" id="resultat-tontine" aria-live="polite"></div>
+      </form>
+    </section>
+
+    <!-- Crée ton agent -->
+    <section class="bloc cree">
+      <div>
+        <p class="sur-titre">Crée ton agent</p>
+        <h2>Ton métier, ton assistant</h2>
+        <p class="intro">Décris ton besoin en une phrase. Tehis prépare un agent qui connaît tes tarifs, tes horaires et ta façon de parler à tes clients.</p>
+        <div class="exemples" id="exemples">
+          <button type="button" aria-pressed="true" data-i="0">💇🏾‍♀️ Salon de coiffure</button>
+          <button type="button" aria-pressed="false" data-i="1">🍲 Maquis</button>
+          <button type="button" aria-pressed="false" data-i="2">🧵 Couture</button>
+          <button type="button" aria-pressed="false" data-i="3">🚗 Permis de conduire</button>
+        </div>
+      </div>
+      <div class="fiche" id="fiche" aria-live="polite"></div>
+    </section>
+
+    <!-- Comment ça marche -->
+    <section class="bloc">
+      <p class="sur-titre">Comment ça marche</p>
+      <h2>Trois gestes, pas de formation</h2>
+      <ol class="etapes">
+        <li><span>1</span><div><strong>Choisis ton compagnon</strong><p>Chat, perroquet, éléphant ou tortue. Donne-lui un nom.</p></div></li>
+        <li><span>2</span><div><strong>Parle-lui comme sur WhatsApp</strong><p>Écris, dicte ou envoie une photo : un produit, un exercice, une facture.</p></div></li>
+        <li><span>3</span><div><strong>Il calcule, écrit et te rappelle</strong><p>Prix, budget, lettres, rappels : prêt à copier ou partager sur WhatsApp.</p></div></li>
+      </ol>
+      <p class="note">Pas besoin de store : Tehis s'installe depuis le navigateur, sur Android comme sur iPhone.</p>
+    </section>
+
+    <!-- Tarifs -->
+    <section class="bloc" id="tarifs">
+      <p class="sur-titre">Tarifs</p>
+      <h2>Commence gratuitement</h2>
+      <div class="offres">
+        <article class="offre">
+          <h3>Gratuit</h3>
+          <p class="prix">0 <small>FCFA</small></p>
+          <ul><li>Compagnon 3D qui parle</li><li>Rédaction, répétiteur, rappels</li><li>Tous les calculs sans IA</li><li>1 agent personnalisé</li></ul>
+        </article>
+        <article class="offre">
+          <h3>Plus</h3>
+          <p class="prix">2 500 <small>FCFA / mois</small></p>
+          <ul><li>Tout le Gratuit</li><li>Vendeur en ligne, emploi et CV</li><li>Budget, épargne et tontine</li><li>Démarches administratives</li><li>3 agents personnalisés</li></ul>
+        </article>
+        <article class="offre vedette">
+          <p class="etiquette">Pour les entrepreneurs</p>
+          <h3>Pro Entrepreneur</h3>
+          <p class="prix">10 000 <small>FCFA / mois</small></p>
+          <ul><li>Tout le Plus</li><li>Agent financier : point mort, prix, prévisionnel, trésorerie</li><li>10 agents personnalisés, avec recherche sur internet</li><li>Mode développeur : code, GitHub, Render</li></ul>
+        </article>
+      </div>
+      <p class="note">Paiement par Mobile Money. Prix de lancement réservé aux premiers inscrits.</p>
+    </section>
+
+    <!-- Inscription -->
+    <section class="bloc inscription" id="rejoindre">
+      <div class="inscription-texte">
+        <p class="sur-titre">Liste d'attente</p>
+        <h2>Sois parmi les premiers</h2>
+        <p class="intro">Inscris-toi : on te prévient sur WhatsApp dès l'ouverture. Les premiers testeurs utilisent Tehis gratuitement pendant l'essai et nous aident à l'améliorer.</p>
+      </div>
+      <form class="formulaire" id="formulaire" novalidate>
+        <label>Prénom<input name="prenom" type="text" autocomplete="given-name" maxlength="40" required></label>
+        <label>Numéro WhatsApp<input name="whatsapp" type="tel" autocomplete="tel" inputmode="tel" placeholder="07 00 00 00 00" required></label>
+        <label>Ton activité
+          <select name="activite" required>
+            <option value="">Choisis…</option>
+            <option value="commerce">Commerce, boutique</option>
+            <option value="vente-en-ligne">Vente en ligne</option>
+            <option value="services">Prestataire de services</option>
+            <option value="restauration">Restauration, maquis</option>
+            <option value="artisanat">Artisanat, couture, coiffure</option>
+            <option value="salarie">Salarié</option>
+            <option value="etudiant">Étudiant, élève</option>
+            <option value="developpeur">Développeur</option>
+            <option value="autre">Autre</option>
+          </select>
+        </label>
+        <label><span>Ville <span class="facultatif">(facultatif)</span></span><input name="ville" type="text" autocomplete="address-level2" maxlength="60" placeholder="Abidjan, Bouaké…"></label>
+        <label class="piege" aria-hidden="true">Site<input name="site" type="text" tabindex="-1" autocomplete="off"></label>
+        <label class="case"><input name="testeur" type="checkbox" checked><span>Je veux tester l'app avant tout le monde</span></label>
+        <label class="case"><input name="consentement" type="checkbox"><span>J'accepte d'être contacté sur WhatsApp au sujet de Tehis. <a href="/confidentialite">Confidentialité</a></span></label>
+        <p class="erreur" id="erreur" role="alert" hidden></p>
+        <button class="btn plein" type="submit" id="envoyer">M'inscrire</button>
+      </form>
+      <div class="merci" id="merci" hidden tabindex="-1">
+        <p class="grand" id="merci-titre"></p>
+        <p id="merci-texte"></p>
+        <div class="partage">
+          <p>Invite tes proches : les inscrits qui parrainent le plus passent en premier pour l'essai.</p>
+          <div class="lien-parrain"><input id="lien" type="text" readonly aria-label="Ton lien de parrainage"><button class="btn petit" type="button" id="copier">Copier</button></div>
+          <a class="btn whatsapp" id="partager-wa" target="_blank" rel="noopener">Partager sur WhatsApp</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Questions -->
+    <section class="bloc faq">
+      <p class="sur-titre">Questions</p>
+      <h2>Ce qu'on nous demande</h2>
+      <details><summary>C'est quoi, Tehis ?</summary><p>Une application d'assistants IA, incarnée par un compagnon 3D que tu choisis. Elle t'aide pour ton activité (prix, marges, trésorerie, ventes en ligne) et pour ton quotidien (budget, tontine, courriers, CV, démarches, devoirs, rappels).</p></details>
+      <details><summary>Faut-il télécharger une application ?</summary><p>Non. Tehis s'ouvre dans le navigateur et s'ajoute à l'écran d'accueil de ton téléphone, comme une application. Ça marche sur Android et sur iPhone.</p></details>
+      <details><summary>Combien ça coûte ?</summary><p>Il y a une offre gratuite. Les offres Plus (2 500 FCFA par mois) et Pro Entrepreneur (10 000 FCFA par mois) se paient par Mobile Money. Pendant l'essai, les testeurs ne paient rien.</p></details>
+      <details><summary>Est-ce que mes calculs sont fiables ?</summary><p>Oui : les calculs (prix, point mort, budget, tontine) passent par un moteur testé, pas par l'IA. L'IA explique les résultats et propose des actions. Tehis n'est pas un expert-comptable : pour les impôts ou un prêt, il te conseille de voir un professionnel.</p></details>
+      <details><summary>Que faites-vous de mes données ?</summary><p>Ton numéro sert uniquement à te prévenir du lancement et de l'essai. Il n'est ni vendu ni partagé. Tu peux demander sa suppression à tout moment. Détails dans la <a href="/confidentialite">politique de confidentialité</a>.</p></details>
+      <details><summary>Ça marche en dehors d'Abidjan ?</summary><p>Oui, partout en Côte d'Ivoire, avec une connexion internet. D'autres pays d'Afrique de l'Ouest francophone suivront.</p></details>
+    </section>
+  </main>
+
+  <footer class="pied">
+    <p class="marque">Tehis<span>.</span></p>
+    <p>Ton compagnon IA, en français et en FCFA.</p>
+    <p><a href="/confidentialite">Confidentialité</a></p>
+    <p class="petit">© 2026 Tehis</p>
+  </footer>
+
+  <script type="module" src="/site.js"></script>
+</body>
+</html>

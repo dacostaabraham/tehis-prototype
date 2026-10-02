@@ -123,3 +123,12 @@ public/app.js, cards.js      interface et cartes
 public/companion.js          compagnon 3D
 test/                        tests et faux serveur Anthropic
 ```
+
+## Site de prélancement (`site/`)
+
+Page publique avec le compagnon 3D, les agents, un calcul de tontine, les tarifs, une FAQ et la **liste d'attente** (prénom, WhatsApp, activité, ville, envie de tester, parrainage par lien `?ref=CODE`).
+
+- Déployé par le même `render.yaml` comme second service, **tehis-site**, qui partage la base PostgreSQL (table `waitlist`).
+- **Admin** : `https://<site>/admin` (identifiant libre, mot de passe `ADMIN_PASSWORD`), avec export CSV pour Excel.
+- `CONTACT_EMAIL` (facultatif) : adresse affichée dans la page Confidentialité.
+- En local : `ADMIN_PASSWORD=test node site/server.js` puis http://localhost:3100.
