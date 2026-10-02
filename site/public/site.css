@@ -35,6 +35,11 @@ p { margin: 0; }
 
 /* Navigation */
 .nav { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.nav .liens { display: flex; align-items: center; gap: 14px; }
+.nav .liens a:not(.btn) { font-weight: 600; font-size: 15px; text-decoration: none; }
+.deja { margin-top: 12px; font-size: 14px; color: var(--muted); }
+.deja.clair { color: color-mix(in srgb, currentColor 78%, transparent); }
+.deja.clair a { color: #fff; }
 .marque { font: 700 24px var(--display); letter-spacing: -.04em; color: var(--ink); text-decoration: none; }
 .marque span { color: var(--accent); }
 
