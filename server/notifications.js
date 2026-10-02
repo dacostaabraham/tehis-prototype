@@ -3,7 +3,7 @@
 import webpush from 'web-push';
 import { prochaineOccurrence } from './outils/organisation.js';
 
-export async function initNotifications(store) {
+export async function initNotifications(store, { envoyerPush = null } = {}) {
   let publique = process.env.VAPID_PUBLIC_KEY;
   let privee = process.env.VAPID_PRIVATE_KEY;
   if (!publique || !privee) {
@@ -19,9 +19,10 @@ export async function initNotifications(store) {
 
   async function envoyerATous(charge) {
     const abonnements = await store.listSubscriptions();
+    const notifier = envoyerPush || ((abonnement, c) => webpush.sendNotification(abonnement, JSON.stringify(c), { TTL: 3600 }));
     let envoyes = 0;
     for (const sub of abonnements) {
-      try { await webpush.sendNotification(sub, JSON.stringify(charge), { TTL: 3600 }); envoyes++; } catch (e) {
+      try { await notifier(sub, charge); envoyes++; } catch (e) {
         if (e.statusCode === 404 || e.statusCode === 410) await store.deleteSubscription(sub.endpoint);
         else console.warn('Push refusé :', e.statusCode, e.body);
       }
