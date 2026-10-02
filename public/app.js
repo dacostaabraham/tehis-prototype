@@ -7,6 +7,7 @@ import { initPerso, ouvrirCreation, ouvrirEdition } from './perso.js';
 import { voixDisponible, parler, arreter, debloquer } from './voix.js';
 import { markdown, echapper } from './shared/markdown.js';
 import { carteResultat, carteDocument, carteSuggestion, carteOffreDev, carteValidation, noteActivite, blocSources, blocListe, brancherListes, actionsDocument, dateFr } from './cards.js';
+import { toast } from './shared/ui.js';
 
 const $ = (s) => document.querySelector(s);
 const etat = { agent: 'compagnon', profil: {}, statut: {}, compagnon: null, envoi: false, photo: null, persos: { agents: [], limites: { agents: 1 }, offre: 'gratuit' } };
@@ -38,22 +39,33 @@ async function api(path, options = {}) {
   } catch (e) {
     throw new Error('Pas de connexion : vérifie ton réseau puis réessaie.');
   }
-  if (r.status === 401 && path !== '/api/login') { montrer('login'); throw new Error('Connexion requise'); }
+  if (r.status === 401 && path !== '/api/login') { montrer('bienvenue'); throw new Error('Connexion requise'); }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.erreur || `Erreur ${r.status}`);
   return data;
 }
 
 function montrer(vue) {
-  for (const v of ['login', 'setup', 'app']) $(`#view-${v}`).hidden = v !== vue;
+  for (const v of ['bienvenue', 'setup', 'app']) $(`#view-${v}`).hidden = v !== vue;
 }
 
-/* ---------- Connexion ---------- */
+/* ---------- Bienvenue ---------- */
+function afficherBienvenue() {
+  const beta = etat.statut.motDePasseRequis && !etat.statut.authentifie;
+  $('#bienvenue-go').hidden = beta;
+  $('#login-form').hidden = !beta;
+  montrer('bienvenue');
+}
+$('#bienvenue-go').addEventListener('click', async () => {
+  lsSet('tehis_bienvenue', true);
+  await demarrer();
+});
 $('#login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const err = $('#login-error'); err.hidden = true;
   try {
     await api('/api/login', { method: 'POST', body: JSON.stringify({ password: $('#password').value }) });
+    lsSet('tehis_bienvenue', true);
     await demarrer();
   } catch (ex) { err.textContent = ex.message; err.hidden = false; }
 });
@@ -211,6 +223,34 @@ function rendreItem(it, items) {
   else ajouterBulle(it.role === 'user' ? 'user' : 'bot', it.content, it.photo);
 }
 
+/* Grille de découverte des agents, visible tant que l'utilisateur n'a rien essayé. */
+function grilleDecouverte() {
+  const cont = document.createElement('div');
+  cont.className = 'decouverte';
+  const titre = document.createElement('p');
+  titre.className = 'decouverte-titre';
+  titre.textContent = 'Découvre mes agents';
+  cont.appendChild(titre);
+  const g = document.createElement('div');
+  g.className = 'decouverte-grille';
+  for (const [id, a] of Object.entries(AGENTS)) {
+    if (id === 'compagnon' || id === 'dev') continue;
+    const acces = accesAgent(id, etat.profil);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'decouverte-carte';
+    b.innerHTML = `<span class="agent-icone" aria-hidden="true">${a.icone}</span><span>${echapper(a.nom)}</span>${acces.ok ? '' : `<span class="badge mini">${echapper(NOMS_OFFRES[a.offre])}</span>`}`;
+    b.setAttribute('aria-label', `${a.nom} : ${a.resume}${acces.ok ? '' : ` (${acces.raison})`}`);
+    b.addEventListener('click', () => {
+      if (!acces.ok) { toast(acces.raison); return; }
+      choisirAgent(id);
+    });
+    g.appendChild(b);
+  }
+  cont.appendChild(g);
+  return cont;
+}
+
 function afficherHistorique() {
   const zone = $('#messages');
   zone.innerHTML = '';
@@ -225,8 +265,9 @@ function afficherHistorique() {
   const a = metaAgent(etat.agent);
   if (!items.length) {
     ajouterBulle('bot', etat.agent === 'compagnon'
-      ? `Salut${etat.profil.prenom ? ` ${etat.profil.prenom}` : ''} ! Moi c'est ${etat.profil.nomCompagnon || 'Kiki'}. De quoi veux-tu parler ? Touche mon nom en haut pour choisir un agent spécialisé.`
+      ? `Salut${etat.profil.prenom ? ` ${etat.profil.prenom}` : ''} ! Moi c'est ${etat.profil.nomCompagnon || 'Kiki'}. De quoi veux-tu parler ?`
       : a.intro);
+    if (etat.agent === 'compagnon') zone.appendChild(grilleDecouverte());
   }
   for (const it of items) rendreItem(it, items);
   const sug = $('#suggestions');
@@ -304,7 +345,7 @@ $('#photo-input').addEventListener('change', async (e) => {
     etat.photo = await reduireImage(f);
     $('#piece-img').src = etat.photo;
     $('#piece-jointe').hidden = false;
-  } catch { alert("Cette image n'a pas pu être lue."); }
+  } catch { toast("Cette image n'a pas pu être lue."); }
 });
 $('#piece-retirer').addEventListener('click', retirerPhoto);
 function retirerPhoto() { etat.photo = null; $('#piece-jointe').hidden = true; $('#piece-img').removeAttribute('src'); }
@@ -476,7 +517,7 @@ function suiteValidation(item) {
 /* ---------- Mode développeur ---------- */
 function ouvrirDialogueDev() {
   if (!accesAgent('dev', { ...etat.profil, developpeur: true }).ok) {
-    alert(`Le mode développeur fait partie de l'offre ${NOMS_OFFRES.pro}.`);
+    toast(`Le mode développeur fait partie de l'offre ${NOMS_OFFRES.pro}.`);
     return;
   }
   $('#dlg-dev').showModal();
@@ -572,7 +613,7 @@ function afficherCalcul(id) {
     const p = lireForm();
     const lignes = def.champs.filter(([k]) => p[k] !== undefined).map(([k, lib]) => `- ${lib} : ${Array.isArray(p[k]) ? p[k].join(' ') : p[k]}`).join('\n');
     const cible = def.groupe === 'foyer' ? 'budget' : 'finance';
-    if (!accesAgent(cible, etat.profil).ok) { alert(accesAgent(cible, etat.profil).raison); return; }
+    if (!accesAgent(cible, etat.profil).ok) { toast(accesAgent(cible, etat.profil).raison); return; }
     choisirAgent(cible); ouvrirPanneau('chat');
     envoyer(`J'ai fait le calcul « ${def.nom} » avec ces chiffres :\n${lignes}\nQu'est-ce que tu en penses et que devrais-je changer ?`);
   };
@@ -723,7 +764,7 @@ $('#reg-notif-btn').addEventListener('click', async () => {
 /* ---------- Démarrage ---------- */
 async function demarrer() {
   etat.statut = await api('/api/status');
-  if (!etat.statut.authentifie) return montrer('login');
+  if (!lsGet('tehis_bienvenue', false) || !etat.statut.authentifie) return afficherBienvenue();
   etat.profil = await api('/api/profile');
   if (!etat.profil.espece) return afficherSetup();
   await ouvrirApp();
