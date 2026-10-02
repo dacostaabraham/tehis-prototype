@@ -1,6 +1,7 @@
 // « Crée ton agent » : description → fiche proposée par l'IA → outils et connaissances → enregistrement.
 import { OUTILS_PERSO, LIMITES_PERSO, TONS_PERSO, MAX_CONNAISSANCES, NOMS_OFFRES, offreSuffit } from './shared/agents.js';
 import { echapper } from './shared/markdown.js';
+import { toast } from './shared/ui.js';
 
 const $ = (s) => document.querySelector(s);
 const EXEMPLES = [
@@ -68,7 +69,7 @@ export async function ouvrirCreation(info) {
   etat = info;
   edition = null;
   if (info.agents.length >= info.limites.agents) {
-    alert(`Ton offre ${NOMS_OFFRES[info.offre]} permet ${info.limites.agents} agent${info.limites.agents > 1 ? 's' : ''} personnalisé${info.limites.agents > 1 ? 's' : ''}. Modifie un agent existant ou passe à une offre supérieure.`);
+    toast(`Ton offre ${NOMS_OFFRES[info.offre]} permet ${info.limites.agents} agent${info.limites.agents > 1 ? 's' : ''} personnalisé${info.limites.agents > 1 ? 's' : ''}. Modifie un agent existant ou passe à une offre supérieure.`);
     return;
   }
   $('#perso-titre').textContent = 'Crée ton agent';

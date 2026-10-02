@@ -48,7 +48,26 @@ input[type=text], input[type=password], input[type=number], textarea {
 .btn.small { min-height: 40px; font-size: 14px; }
 .badge { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; }
 .badge.warn { background: var(--warn-soft); color: var(--warn); }
+.badge.mini { font-size: 10px; padding: 2px 8px; }
 .offline-banner { background: var(--warn-soft); color: var(--warn); text-align: center; font-size: 13px; font-weight: 600; padding: 8px 12px; }
+
+/* Bienvenue */
+.bienvenue { gap: 14px; }
+.accroche { font-size: 17px; margin: 0; }
+.atouts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.atouts li { display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px; }
+.atouts li span[aria-hidden] { font-size: 20px; line-height: 1.2; }
+.beta { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; }
+
+/* Toast (remplace alert() natif) */
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(96px + env(safe-area-inset-bottom, 0px)); z-index: 60; max-width: min(92vw, 480px); background: var(--ink); color: var(--bg); font-size: 14px; font-weight: 500; padding: 12px 18px; border-radius: 14px; box-shadow: 0 8px 24px rgb(0 0 0 / .25); text-align: center; }
+
+/* Découverte des agents */
+.decouverte { align-self: stretch; display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.decouverte-titre { font: 600 13px var(--body); letter-spacing: .6px; text-transform: uppercase; color: var(--accent); margin: 0; }
+.decouverte-grille { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.decouverte-carte { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 10px 4px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); font-size: 12px; font-weight: 600; min-height: 84px; }
+.decouverte-carte .agent-icone { font-size: 26px; }
 
 /* Choix du compagnon */
 .setup { max-width: 520px; margin: 0 auto; padding-block: 28px 32px; padding-inline: 16px; display: flex; flex-direction: column; gap: 12px; }

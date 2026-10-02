@@ -20,16 +20,25 @@
   </script>
 </head>
 <body>
-  <!-- Connexion -->
-  <main id="view-login" class="view center" hidden>
-    <form id="login-form" class="card narrow" autocomplete="on">
+  <!-- Bienvenue -->
+  <main id="view-bienvenue" class="view center" hidden>
+    <div class="card narrow bienvenue">
       <div class="brand-big">Tehis<span>.</span></div>
-      <p class="muted">Prototype privé. Entre le mot de passe de test.</p>
-      <label for="password">Mot de passe</label>
-      <input id="password" name="password" type="password" required autocomplete="current-password">
-      <p id="login-error" class="error" role="alert" hidden></p>
-      <button class="btn primary" type="submit">Entrer</button>
-    </form>
+      <p class="accroche">Ton compagnon IA qui t'aide au quotidien, en Côte d'Ivoire.</p>
+      <ul class="atouts">
+        <li><span aria-hidden="true">🐾</span> Un compagnon 3D qui te parle et t'écoute</li>
+        <li><span aria-hidden="true">🧰</span> 12 agents experts : budget, santé, logement, CV…</li>
+        <li><span aria-hidden="true">🎁</span> Gratuit pour commencer, sans carte bancaire</li>
+      </ul>
+      <button class="btn primary" type="button" id="bienvenue-go">Commencer gratuitement</button>
+      <form id="login-form" class="beta" hidden autocomplete="on">
+        <p class="muted small">Bêta privée : entre ton code d'accès pour entrer.</p>
+        <label for="password">Code d'accès</label>
+        <input id="password" name="password" type="password" required autocomplete="current-password">
+        <p id="login-error" class="error" role="alert" hidden></p>
+        <button class="btn primary" type="submit">Entrer</button>
+      </form>
+    </div>
   </main>
 
   <!-- Choix du compagnon -->
