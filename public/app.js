@@ -9,6 +9,7 @@ import { markdown, echapper } from './shared/markdown.js';
 import { carteResultat, carteDocument, carteSuggestion, carteOffreDev, carteValidation, noteActivite, blocSources, blocListe, brancherListes, actionsDocument, dateFr } from './cards.js';
 import { toast } from './shared/ui.js';
 import { carteLieux, cartePosition, carteChoix, barreProximite, obtenirPosition, positionConnue } from './lieux.js';
+import { vignetteAgent, etatVide, ICONES_SVG } from './shared/identite.js';
 
 const $ = (s) => document.querySelector(s);
 const etat = { agent: 'compagnon', profil: {}, statut: {}, compagnon: null, envoi: false, photo: null, persos: { agents: [], limites: { agents: 1 }, offre: 'gratuit' } };
@@ -105,6 +106,13 @@ async function ouvrirApp() {
   if (!etat.compagnon) {
     etat.compagnon = await mountCompanion($('#stage'), etat.profil.espece || 'chat');
     $('#stage').addEventListener('mood', (e) => humeur(e.detail));
+    // Une tape sur le compagnon (sans glisser) = petite fête.
+    let tapX = 0, tapY = 0;
+    $('#stage').addEventListener('pointerdown', (e) => { tapX = e.clientX; tapY = e.clientY; });
+    $('#stage').addEventListener('pointerup', (e) => {
+      if (e.target.closest('button')) return; // pas sur les boutons (voix…)
+      if (Math.hypot(e.clientX - tapX, e.clientY - tapY) < 12) etat.compagnon.setMood('fete');
+    });
   } else {
     await etat.compagnon.setSpecies(etat.profil.espece || 'chat');
   }
@@ -125,7 +133,7 @@ function fermerDialogues() { document.querySelectorAll('dialog[open]').forEach((
 document.querySelectorAll('dialog [data-fermer]').forEach((b) => b.addEventListener('click', () => b.closest('dialog').close()));
 document.querySelectorAll('dialog').forEach((d) => d.addEventListener('click', (e) => { if (e.target === d) d.close(); }));
 
-$('#agent-btn').addEventListener('click', () => {
+function ouvrirFeuilleAgents() {
   const zone = $('#agents-liste');
   zone.innerHTML = '';
   for (const g of GROUPES) {
@@ -137,7 +145,7 @@ $('#agent-btn').addEventListener('click', () => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = `agent-ligne${id === etat.agent ? ' actif' : ''}`;
-      b.innerHTML = `<span class="agent-icone" aria-hidden="true">${a.icone}</span><span class="agent-texte"><strong>${echapper(a.nom)}</strong><span class="small muted">${echapper(a.resume)}</span></span>${acces.ok ? '' : `<span class="badge">${a.developpeur && !etat.profil.developpeur && acces.raison.includes('mode') ? 'Activer' : echapper(NOMS_OFFRES[a.offre])}</span>`}`;
+      b.innerHTML = `${vignetteAgent(id, 'petite')}<span class="agent-texte"><strong>${echapper(a.nom)}</strong><span class="small muted">${echapper(a.resume)}</span></span>${acces.ok ? '' : `<span class="badge">${a.developpeur && !etat.profil.developpeur && acces.raison.includes('mode') ? 'Activer' : echapper(NOMS_OFFRES[a.offre])}</span>`}`;
       b.addEventListener('click', () => {
         if (acces.ok) { fermerDialogues(); choisirAgent(id); ouvrirPanneau('chat'); return; }
         if (a.developpeur && acces.raison.includes('mode')) { fermerDialogues(); ouvrirDialogueDev(); return; }
@@ -148,7 +156,8 @@ $('#agent-btn').addEventListener('click', () => {
     if (g.id === 'base') ajouterMesAgents(zone);
   }
   $('#sheet-agents').showModal();
-});
+}
+$('#agent-header-changer').addEventListener('click', ouvrirFeuilleAgents);
 
 function ajouterMesAgents(zone) {
   const { agents, limites } = etat.persos;
@@ -183,8 +192,12 @@ function choisirAgent(agent) {
   etat.agent = agent;
   lsSet('tehis_agent', agent);
   const a = metaAgent(agent);
-  $('#agent-icone').textContent = a.icone;
-  $('#agent-nom').textContent = agent === 'compagnon' ? (etat.profil.nomCompagnon || 'Compagnon') : a.nom;
+  const nom = agent === 'compagnon' ? (etat.profil.nomCompagnon || 'Compagnon') : a.nom;
+  $('#agent-header-vignette').innerHTML = estPerso(agent)
+    ? `<span class="vignette petite" aria-hidden="true"><span style="font-size:20px;line-height:1">${echapper(a.icone)}</span></span>`
+    : vignetteAgent(agent, 'petite');
+  $('#agent-header-nom').textContent = nom;
+  $('#agent-header-resume').textContent = a.resume || '';
   $('#input').placeholder = agent === 'compagnon' ? `Écris à ${etat.profil.nomCompagnon || 'ton compagnon'}…` : 'Ton message…';
   afficherHistorique();
 }
@@ -194,11 +207,80 @@ document.querySelectorAll('.bottomnav button').forEach((b) => b.addEventListener
 $('#btn-settings').addEventListener('click', () => ouvrirPanneau('reglages'));
 function ouvrirPanneau(p) {
   document.querySelectorAll('.bottomnav button').forEach((b) => (b.dataset.panel === p ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
-  for (const id of ['chat', 'calc', 'affaires', 'reglages']) $(`#panel-${id}`).hidden = id !== p;
+  for (const id of ['chat', 'agents', 'calc', 'affaires', 'reglages']) $(`#panel-${id}`).hidden = id !== p;
   $('#view-app').classList.toggle('compact', p !== 'chat');
   if (p === 'calc') afficherCalcul(calculCourant);
+  if (p === 'agents') afficherPanneauAgents();
   if (p === 'affaires') afficherAffaires();
   if (p === 'reglages') afficherReglages();
+}
+
+/* ---------- Onglet Agents ---------- */
+function carteFicheAgent(id, a, acces) {
+  const el = document.createElement('article');
+  el.className = `fiche-agent${acces.ok ? '' : ' verrouillee'}`;
+  const exemples = (a.suggestions || []).slice(0, 2).map((s) => `<li>${echapper(s)}</li>`).join('');
+  el.innerHTML = `${vignetteAgent(id)}
+    <div class="fiche-agent-corps">
+      <div class="fiche-agent-tete"><strong>${echapper(a.nom)}</strong>${acces.ok ? (id === etat.agent ? '<span class="badge mini actif">En cours</span>' : '') : `<span class="badge mini">${echapper(NOMS_OFFRES[a.offre])}</span>`}</div>
+      <p class="small muted">${echapper(a.resume)}</p>
+      ${exemples ? `<ul class="fiche-agent-exemples">${exemples}</ul>` : ''}
+    </div>
+    <button class="btn ${acces.ok ? 'accent' : ''} small" type="button">${acces.ok ? 'Essayer' : NOMS_OFFRES[a.offre]}</button>`;
+  el.querySelector('button').addEventListener('click', () => {
+    if (!acces.ok) {
+      if (a.developpeur && !etat.profil.developpeur && acces.raison.includes('mode')) { ouvrirDialogueDev(); return; }
+      toast(acces.raison);
+      return;
+    }
+    choisirAgent(id);
+    ouvrirPanneau('chat');
+  });
+  return el;
+}
+
+function afficherPanneauAgents() {
+  const zone = $('#agents-panneau');
+  zone.innerHTML = '';
+  for (const g of GROUPES) {
+    const ids = Object.keys(AGENTS).filter((id) => AGENTS[id].groupe === g.id);
+    if (!ids.length) continue;
+    zone.insertAdjacentHTML('beforeend', `<h3 class="sec">${echapper(g.nom)}</h3>`);
+    const grille = document.createElement('div');
+    grille.className = 'fiches-agents';
+    for (const id of ids) grille.appendChild(carteFicheAgent(id, AGENTS[id], accesAgent(id, etat.profil)));
+    zone.appendChild(grille);
+  }
+  // Agents personnels
+  const { agents, limites } = etat.persos;
+  zone.insertAdjacentHTML('beforeend', `<h3 class="sec">Mes agents <span class="muted">· ${agents.length}/${limites.agents}</span></h3>`);
+  const grille = document.createElement('div');
+  grille.className = 'fiches-agents';
+  for (const f of agents) {
+    const id = `perso:${f.id}`;
+    const el = document.createElement('article');
+    el.className = 'fiche-agent';
+    el.innerHTML = `<span class="vignette" aria-hidden="true"><span style="font-size:22px;line-height:1">${echapper(f.icone)}</span></span>
+      <div class="fiche-agent-corps">
+        <div class="fiche-agent-tete"><strong>${echapper(f.nom)}</strong>${f.verrouille ? '<span class="badge mini">Verrouillé</span>' : ''}</div>
+        <p class="small muted">${echapper(f.resume)}</p>
+      </div>
+      <button class="btn accent small" type="button">Essayer</button>`;
+    el.querySelector('button').addEventListener('click', () => {
+      if (f.verrouille) { toast('Verrouillé avec ton offre actuelle.'); return; }
+      choisirAgent(id);
+      ouvrirPanneau('chat');
+    });
+    grille.appendChild(el);
+  }
+  const creer = document.createElement('button');
+  creer.type = 'button';
+  creer.className = 'fiche-agent creer';
+  creer.innerHTML = `<span class="vignette" aria-hidden="true"><span style="font-size:22px;line-height:1;color:var(--accent)">＋</span></span>
+    <div class="fiche-agent-corps"><strong>Crée ton agent</strong><p class="small muted">Décris ton besoin, Tehis prépare l'agent.</p></div>`;
+  creer.addEventListener('click', () => ouvrirCreation(etat.persos));
+  grille.appendChild(creer);
+  zone.appendChild(grille);
 }
 
 /* ---------- Chat ---------- */
@@ -276,7 +358,7 @@ function grilleDecouverte() {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'decouverte-carte';
-    b.innerHTML = `<span class="agent-icone" aria-hidden="true">${a.icone}</span><span>${echapper(a.nom)}</span>${acces.ok ? '' : `<span class="badge mini">${echapper(NOMS_OFFRES[a.offre])}</span>`}`;
+    b.innerHTML = `${vignetteAgent(id, 'petite')}<span>${echapper(a.nom)}</span>${acces.ok ? '' : `<span class="badge mini">${echapper(NOMS_OFFRES[a.offre])}</span>`}`;
     b.setAttribute('aria-label', `${a.nom} : ${a.resume}${acces.ok ? '' : ` (${acces.raison})`}`);
     b.addEventListener('click', () => {
       if (!acces.ok) { toast(acces.raison); return; }
@@ -691,7 +773,7 @@ async function afficherAffaires() {
   const [rappels, listes, docs, memoire] = await Promise.all(['/api/reminders', '/api/lists', '/api/documents', '/api/memories'].map((u) => api(u).catch(() => [])));
 
   const ul = $('#rappels-list');
-  ul.innerHTML = rappels.length ? '' : '<li class="muted small">Aucun rappel. Demande à l\'agent Organisation : « Rappelle-moi de… ».</li>';
+  ul.innerHTML = rappels.length ? '' : `<li class="vide">${etatVide(ICONES_SVG.organisation, 'Aucun rappel', 'Demande à l\u2019agent Organisation : « Rappelle-moi de payer le loyer le 5 à 9 h ».')}</li>`;
   for (const r of rappels) {
     const li = document.createElement('li');
     li.innerHTML = `<div><div>🔔 ${echapper(r.texte)}</div><div class="muted small">${echapper(dateFr(r.quand))}</div></div><button type="button" class="suppr">Supprimer</button>`;
@@ -700,11 +782,11 @@ async function afficherAffaires() {
   }
 
   const zl = $('#listes-zone');
-  zl.innerHTML = listes.length ? listes.map((l) => `<div class="result">${blocListe({ ...l, type: undefined })}</div>`).join('') : '<p class="muted small">Aucune liste. Exemple : « Ajoute riz et huile à ma liste de courses ».</p>';
+  zl.innerHTML = listes.length ? listes.map((l) => `<div class="result">${blocListe({ ...l, type: undefined })}</div>`).join('') : etatVide(ICONES_SVG.redaction, 'Aucune liste', 'Exemple : « Ajoute riz et huile à ma liste de courses ».');
   brancherListes(zl, ctxCartes);
 
   const ud = $('#docs-list');
-  ud.innerHTML = docs.length ? '' : '<li class="muted small">Les lettres, CV et fiches créés par tes agents apparaîtront ici.</li>';
+  ud.innerHTML = docs.length ? '' : `<li class="vide">${etatVide(ICONES_SVG.redaction, 'Aucun document', 'Les lettres, CV et fiches créés par tes agents apparaîtront ici.')}</li>`;
   for (const d of docs) {
     const li = document.createElement('li');
     li.innerHTML = `<button type="button" class="doc-ouvrir"><div>${echapper(d.titre)}</div><div class="muted small">${new Date(d.created_at).toLocaleDateString('fr-FR')}</div></button><button type="button" class="suppr">Supprimer</button>`;
@@ -714,7 +796,7 @@ async function afficherAffaires() {
   }
 
   const um = $('#memory-list');
-  um.innerHTML = memoire.length ? '' : '<li class="muted small">Rien pour l\'instant. Parle de toi ou de ton activité et ton compagnon retiendra l\'essentiel.</li>';
+  um.innerHTML = memoire.length ? '' : `<li class="vide">${etatVide(ICONES_SVG.compagnon, 'Rien retenu pour l\u2019instant', 'Parle de toi ou de ton activité et ton compagnon retiendra l\u2019essentiel.')}</li>`;
   for (const m of memoire) {
     const li = document.createElement('li');
     li.innerHTML = `<div><div class="cat">${echapper(m.categorie)}</div><div>${echapper(m.fait)}</div></div><button type="button" class="suppr">Oublier</button>`;

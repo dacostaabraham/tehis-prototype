@@ -3,6 +3,7 @@
 import { lineChart, fcfa } from './charts.js';
 import { markdown, echapper } from './shared/markdown.js';
 import { AGENTS } from './shared/agents.js';
+import { vignetteAgent } from './shared/identite.js';
 
 const pct = (x) => (x === null || x === undefined ? '—' : `${(x * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} %`);
 const signe = (n) => (n < 0 ? 'neg' : '');
@@ -199,7 +200,7 @@ export function carteSuggestion(s, ctx) {
   const a = AGENTS[s.agent];
   const el = document.createElement('div');
   el.className = 'result suggestion';
-  el.innerHTML = `<div><strong>${a.icone} ${echapper(a.nom)}</strong><p class="small muted">${echapper(s.raison || a.resume)}</p></div><button class="btn accent small" type="button">Ouvrir</button>`;
+  el.innerHTML = `${vignetteAgent(s.agent, 'petite')}<div><strong>${echapper(a.nom)}</strong><p class="small muted">${echapper(s.raison || a.resume)}</p></div><button class="btn accent small" type="button">Ouvrir</button>`;
   el.querySelector('button').onclick = () => ctx.choisirAgent(s.agent);
   return el;
 }
@@ -207,7 +208,7 @@ export function carteSuggestion(s, ctx) {
 export function carteOffreDev(ctx) {
   const el = document.createElement('div');
   el.className = 'result suggestion';
-  el.innerHTML = `<div><strong>${AGENTS.dev.icone} Mode développeur</strong><p class="small muted">Code, GitHub et déploiement Render, avec ta validation à chaque étape.</p></div><button class="btn accent small" type="button">Activer</button>`;
+  el.innerHTML = `${vignetteAgent('dev', 'petite')}<div><strong>Mode développeur</strong><p class="small muted">Code, GitHub et déploiement Render, avec ta validation à chaque étape.</p></div><button class="btn accent small" type="button">Activer</button>`;
   el.querySelector('button').onclick = () => ctx.ouvrirDialogueDev();
   return el;
 }
