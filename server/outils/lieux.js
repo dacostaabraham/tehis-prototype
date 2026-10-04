@@ -107,7 +107,9 @@ export async function geocoder(texte, fetchImpl = fetch) {
   const url = `${NOMINATIM}?format=jsonv2&limit=1&countrycodes=ci&accept-language=fr&q=${encodeURIComponent(q)}`;
   const res = await appel(url, {}, fetchImpl, 12_000);
   const r = res?.[0];
-  return enCache(cle, r ? { lat: Number(r.lat), lng: Number(r.lon), libelle: r.display_name.split(',').slice(0, 3).join(',').trim() } : null);
+  const resultat = r ? { lat: Number(r.lat), lng: Number(r.lon), libelle: r.display_name.split(',').slice(0, 3).join(',').trim() } : null;
+  console.log(`[lieux] géocodage « ${q} » → ${resultat ? resultat.libelle : 'introuvable'}`);
+  return enCache(cle, resultat);
 }
 
 /**
@@ -138,16 +140,27 @@ const DELAI_PHASE = 15_000; // par miroir et par phase : les succès mesurés pr
 const PHASES_RAYON = [800, 2000, 5000]; // mètres : du plus rapide au plus large
 const SEUIL_PHASE = 4; // assez de résultats → inutile d'élargir
 
-/** Interroge les miroirs Overpass en parallèle : le premier succès gagne, sans attendre les retardataires. */
+/** Interroge les miroirs Overpass en parallèle : le premier succès gagne, sans attendre les retardataires.
+ *  Résout { elements, serveur, dureeMs } ; en cas d'échec total, l'erreur porte le détail par miroir. */
 function interrogerOverpass(corps, fetchImpl, delai = DELAI_PHASE) {
   const options = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `data=${encodeURIComponent(corps)}` };
+  const nomServeur = (u) => { try { return new URL(u).host; } catch { return u; } };
   return new Promise((resolve, reject) => {
     let echecs = 0;
-    let derniere = null;
+    const details = [];
     for (const serveur of OVERPASS) {
+      const t0 = Date.now();
       appel(serveur, options, fetchImpl, delai).then(
-        (res) => resolve(Array.isArray(res.elements) ? res.elements : []),
-        (e) => { echecs += 1; derniere = e; if (echecs >= OVERPASS.length) reject(derniere); }
+        (res) => resolve({ elements: Array.isArray(res.elements) ? res.elements : [], serveur: nomServeur(serveur), dureeMs: Date.now() - t0 }),
+        (e) => {
+          echecs += 1;
+          details.push(`${nomServeur(serveur)}: ${e?.name === 'AbortError' ? 'timeout' : (e?.message || e?.name || '?')}`);
+          if (echecs >= OVERPASS.length) {
+            const err = new Error(`Overpass indisponible (${details.join(' ; ')})`);
+            err.cause = e;
+            reject(err);
+          }
+        }
       );
     }
   });
@@ -155,8 +168,9 @@ function interrogerOverpass(corps, fetchImpl, delai = DELAI_PHASE) {
 
 /** Message d'erreur lisible pour l'utilisateur : jamais de jargon technique. */
 function erreurReseau(e) {
-  const msg = e && e.message ? String(e.message) : '';
-  if ((e && e.name === 'AbortError') || /aborted/i.test(msg)) {
+  const texte = [e?.message, e?.cause?.message].filter(Boolean).join(' ');
+  const surcharge = /abort|timeout|50[34]|429|too busy/i.test(texte) || e?.name === 'AbortError' || e?.cause?.name === 'AbortError';
+  if (surcharge) {
     return 'La recherche a pris trop de temps (serveurs très sollicités). Réessaie dans un instant.';
   }
   return 'La carte des lieux est indisponible pour le moment. Vérifie ta connexion puis réessaie.';
@@ -175,15 +189,22 @@ function erreurReseau(e) {
     for (const m of phases) {
       const corps = `[out:json][timeout:20];(${cat.filtres.map((f) => `nwr${f}(around:${m},${centre.lat},${centre.lng});`).join('')});out center tags 80;`;
       try {
-        elements = await interrogerOverpass(corps, fetchImpl);
+        const { elements: frais, serveur, dureeMs } = await interrogerOverpass(corps, fetchImpl);
+        elements = frais;
         derniereErreur = null;
+        console.log(`[lieux] ${input.categorie} ${m}m → ${frais.length} éléments via ${serveur} en ${(dureeMs / 1000).toFixed(1)}s`);
         // Seuil sur les lieux utilisables (nommés, dédupliqués), pas sur les éléments bruts.
         if (versLieux(elements, centre).length >= SEUIL_PHASE || m === phases[phases.length - 1]) break;
       } catch (e) {
+        console.warn(`[lieux] ${input.categorie} ${m}m → échec : ${e.message}`);
         derniereErreur = e; // on tente la phase suivante : une saturation passagère peut se résorber
       }
     }
-    if (derniereErreur && !elements.length) return { erreur: erreurReseau(derniereErreur) };
+    if (derniereErreur && !elements.length) {
+      console.warn(`[lieux] ${input.categorie} → abandon : ${derniereErreur.message}`);
+      return { erreur: erreurReseau(derniereErreur) };
+    }
+    console.log(`[lieux] ${input.categorie} @${centre.lat.toFixed(3)},${centre.lng.toFixed(3)} → ${versLieux(elements, centre).length} lieux`);
     enCache(cle, elements);
   }
 

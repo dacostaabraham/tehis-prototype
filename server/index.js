@@ -434,7 +434,7 @@ app.post('/api/chat', limite, async (req, res) => {
         stream.on('contentBlock', (b) => {
           if (b.type === 'server_tool_use' && b.name === 'web_search') {
             usage.recherches++;
-            send('mood', { mood: 'travaille' });
+            send('mood', { mood: 'cherche' });
             send('activite', { texte: `Recherche : ${b.input?.query || '…'}` });
             premier = true;
           }
@@ -459,7 +459,7 @@ app.post('/api/chat', limite, async (req, res) => {
       messages.push({ role: 'assistant', content: msg.content });
       const resultats = [];
       for (const bloc of msg.content.filter((b) => b.type === 'tool_use')) {
-        send('mood', { mood: 'travaille' });
+        send('mood', { mood: bloc.name === 'chercher_lieux' ? 'cherche' : 'travaille' });
         const { resultat, evenement } = await executerOutil(agent, bloc.name, bloc.input, { position });
         if (evenement) send(...evenement);
         resultats.push({ type: 'tool_result', tool_use_id: bloc.id, content: JSON.stringify(resultat), ...(resultat?.erreur ? { is_error: true } : {}) });

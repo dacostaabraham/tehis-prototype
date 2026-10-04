@@ -9,7 +9,7 @@ test('quatre espèces avec id et nom', () => {
 });
 
 test('humeurs connues du compagnon', () => {
-  for (const h of ['repos', 'ecoute', 'reflechit', 'travaille', 'fete', 'parle']) {
+  for (const h of ['repos', 'ecoute', 'reflechit', 'travaille', 'cherche', 'fete', 'parle']) {
     assert.ok(HUMEURS[h], `humeur manquante : ${h}`);
   }
 });
