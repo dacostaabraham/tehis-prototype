@@ -79,10 +79,10 @@ input[type=text], input[type=password], input[type=number], textarea {
 /* Application */
 .app { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 .topbar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; }
-.brand { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: -.5px; flex-grow: 1; }
+.brand { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: -.5px; flex-grow: 1; display: flex; align-items: center; gap: 9px; }
 .icon-btn { width: 44px; height: 44px; border-radius: 22px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; }
 
-.stage { position: relative; margin: 0 16px; height: clamp(150px, 24vh, 240px); transition: height .25s ease; border-radius: 22px; background: var(--stage); overflow: hidden; flex-shrink: 0; touch-action: pan-y; }
+.stage { position: relative; margin: 0 16px; height: clamp(190px, 28vh, 300px); transition: height .25s ease; border-radius: 22px; background: var(--stage); overflow: hidden; flex-shrink: 0; touch-action: pan-y; cursor: pointer; }
 .app.compact .stage { height: clamp(110px, 15vh, 150px); }
 .stage canvas { display: block; width: 100%; height: 100%; }
 .stage .fallback { position: absolute; inset: 0; display: grid; place-items: center; }
@@ -154,9 +154,35 @@ details summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var
 .memory-list .cat { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .6px; color: var(--accent); }
 .memory-list button { min-height: 40px; border: 0; background: transparent; color: var(--bad); font-weight: 600; font-size: 13px; }
 
+/* États vides illustrés */
+.etat-vide { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 22px 16px; }
+.etat-vide p { margin: 0; max-width: 280px; }
+.etat-vide-illu { width: 64px; height: 64px; border-radius: 22px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); margin-bottom: 4px; }
+.etat-vide-illu svg { width: 32px; height: 32px; }
+
+/* Onglet Agents : fiches */
+.fiches-agents { display: flex; flex-direction: column; gap: 10px; margin-bottom: 6px; }
+.fiche-agent { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px; width: 100%; text-align: left; }
+.fiche-agent-corps { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.fiche-agent-corps p { margin: 0; }
+.fiche-agent-tete { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fiche-agent-tete strong { font-size: 15px; }
+.badge.mini.actif { background: var(--accent-soft); color: var(--accent); }
+.fiche-agent-exemples { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.fiche-agent-exemples li { font-size: 12.5px; color: var(--muted); padding-left: 14px; position: relative; }
+.fiche-agent-exemples li::before { content: '›'; position: absolute; left: 2px; color: var(--accent); font-weight: 700; }
+.fiche-agent.verrouillee { opacity: .92; }
+.fiche-agent .btn { flex-shrink: 0; }
+button.fiche-agent.creer { border-style: dashed; border-color: var(--accent); cursor: pointer; }
+
+/* Header d'agent dans le chat */
+.agent-header { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--surface); flex-shrink: 0; }
+.agent-header-texte { display: flex; flex-direction: column; min-width: 0; flex-grow: 1; }
+.agent-header-texte strong { font-size: 14px; }
+.agent-header-texte .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-header .btn { flex-shrink: 0; }
+
 /* Agents */
-.agent-btn { position: absolute; top: 10px; right: 10px; z-index: 2; display: flex; align-items: center; gap: 6px; min-height: 40px; max-width: 64%; padding: 0 10px 0 12px; border: 0; border-radius: 12px; background: var(--surface); font: 600 13px var(--body); color: var(--ink); }
-.agent-btn #agent-nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 dialog.sheet { border: 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px)); border-radius: 22px 22px 0 0; margin: auto auto 0; width: 100%; max-width: 560px; max-height: 86vh; overflow-y: auto; background: var(--bg); color: var(--ink); }
 dialog.sheet::backdrop { background: rgb(10 20 20 / .45); }
 dialog.sheet ul { padding-left: 20px; }
@@ -232,6 +258,7 @@ h3.sec { font: 600 13px var(--body); letter-spacing: .6px; text-transform: upper
 .item-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .item-list li { display: flex; gap: 10px; align-items: center; justify-content: space-between; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; }
 .item-list li.muted { background: transparent; border: 0; padding: 0; }
+.item-list li.vide { background: transparent; border: 0; justify-content: center; padding: 0; }
 .item-list .cat { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .6px; color: var(--accent); }
 .item-list .suppr { min-height: 40px; border: 0; background: transparent; color: var(--bad); font-weight: 600; font-size: 13px; flex-shrink: 0; }
 .doc-ouvrir { flex-grow: 1; text-align: left; border: 0; background: transparent; padding: 0; min-height: 40px; }
@@ -253,7 +280,6 @@ select { width: 100%; min-height: 46px; padding: 10px 12px; border-radius: 12px;
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 .panel.scroll > * { flex-shrink: 0; }
-.app.compact .agent-btn { display: none; }
 .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* Crée ton agent */
@@ -321,6 +347,15 @@ select { width: 100%; min-height: 46px; padding: 10px 12px; border-radius: 12px;
 .source-carte { margin: 0; font-size: 11px; }
 .demande-position .quartier { display: flex; gap: 8px; }
 .demande-position .erreur-pos { color: var(--bad); margin: 0; }
+
+/* Identité visuelle des agents */
+.vignette { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; flex-shrink: 0;
+  background: var(--accent-soft); background: color-mix(in srgb, var(--vc, #0E7C86) 13%, var(--surface)); color: var(--vc, #0E7C86); }
+.vignette svg { width: 24px; height: 24px; }
+.vignette.petite { width: 34px; height: 34px; border-radius: 11px; }
+.vignette.petite svg { width: 19px; height: 19px; }
+.logo-tehis { display: inline-grid; place-items: center; flex-shrink: 0; }
+.logo-tehis svg { width: 100%; height: 100%; display: block; }
 
 /* Boutons de réponse rapide */
 .choix { align-self: stretch; display: flex; flex-wrap: wrap; gap: 8px; padding-left: 4px; }

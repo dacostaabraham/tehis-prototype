@@ -23,6 +23,7 @@
   <!-- Bienvenue -->
   <main id="view-bienvenue" class="view center" hidden>
     <div class="card narrow bienvenue">
+      <span class="logo-tehis" style="width:56px;height:56px" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect width="48" height="48" rx="14" fill="#0E7C86"/><path d="M14 20l-2.5-7L19 16.5c2-1.2 4-1.8 5-1.8s3 .6 5 1.8l7.5-3.5L34 20c1.2 1.8 2 3.9 2 6a10 10 0 1 1-20 0c0-2.1.8-4.2 2-6z" fill="#fff"/><circle cx="19.5" cy="25" r="1.6" fill="#0E7C86"/><circle cx="28.5" cy="25" r="1.6" fill="#0E7C86"/><path d="M21 30.5c1.2 1 2.2 1.5 3 1.5s1.8-.5 3-1.5" stroke="#0E7C86" stroke-width="1.8" stroke-linecap="round"/></svg></span>
       <div class="brand-big">Tehis<span>.</span></div>
       <p class="accroche">Ton compagnon IA qui t'aide au quotidien, en Côte d'Ivoire.</p>
       <ul class="atouts">
@@ -58,7 +59,7 @@
   <!-- Application -->
   <main id="view-app" class="view app" hidden>
     <header class="topbar">
-      <div class="brand">Tehis<span>.</span></div>
+      <div class="brand"><span class="logo-tehis" style="width:34px;height:34px" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect width="48" height="48" rx="14" fill="#0E7C86"/><path d="M14 20l-2.5-7L19 16.5c2-1.2 4-1.8 5-1.8s3 .6 5 1.8l7.5-3.5L34 20c1.2 1.8 2 3.9 2 6a10 10 0 1 1-20 0c0-2.1.8-4.2 2-6z" fill="#fff"/><circle cx="19.5" cy="25" r="1.6" fill="#0E7C86"/><circle cx="28.5" cy="25" r="1.6" fill="#0E7C86"/><path d="M21 30.5c1.2 1 2.2 1.5 3 1.5s1.8-.5 3-1.5" stroke="#0E7C86" stroke-width="1.8" stroke-linecap="round"/></svg></span>Tehis<span>.</span></div>
       <span id="demo-badge" class="badge warn" hidden>Mode démo</span>
       <button id="btn-settings" class="icon-btn" type="button" aria-label="Réglages">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg>
@@ -72,13 +73,14 @@
         <svg class="on" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"></path><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"></path></svg>
         <svg class="off" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"></path><path d="m17 9 5 6M22 9l-5 6"></path></svg>
       </button>
-      <button type="button" id="agent-btn" class="agent-btn" aria-haspopup="dialog" aria-label="Changer d'agent">
-        <span id="agent-icone" aria-hidden="true">🐾</span><span id="agent-nom">Compagnon</span>
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
-      </button>
     </section>
 
     <section id="panel-chat" class="panel" aria-label="Discussion">
+      <div id="agent-header" class="agent-header">
+        <span id="agent-header-vignette"></span>
+        <div class="agent-header-texte"><strong id="agent-header-nom"></strong><span id="agent-header-resume" class="small muted"></span></div>
+        <button id="agent-header-changer" class="btn small" type="button">Changer</button>
+      </div>
       <div id="messages" class="messages" aria-live="polite"></div>
       <div id="suggestions" class="suggestions"></div>
       <div id="piece-jointe" class="piece-jointe" hidden><img id="piece-img" alt="Photo jointe"><span>Photo jointe</span><button type="button" id="piece-retirer" aria-label="Retirer la photo">Retirer</button></div>
@@ -103,6 +105,12 @@
       <div class="calc-tabs" id="calc-tabs" role="tablist" aria-label="Calcul"></div>
       <form id="calc-form" class="calc-form"></form>
       <div id="calc-result"></div>
+    </section>
+
+    <section id="panel-agents" class="panel scroll" aria-label="Agents" hidden>
+      <h2>Agents</h2>
+      <p class="muted small">Des experts pour chaque moment de ton quotidien. Choisis-en un pour discuter.</p>
+      <div id="agents-panneau"></div>
     </section>
 
     <section id="panel-affaires" class="panel scroll" aria-label="Mes affaires" hidden>
@@ -222,6 +230,8 @@
     <nav class="bottomnav" aria-label="Navigation">
       <button data-panel="chat" aria-current="page">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"></path></svg>Discuter</button>
+      <button data-panel="agents">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="2"></rect><rect x="13" y="4" width="7" height="7" rx="2"></rect><rect x="4" y="13" width="7" height="7" rx="2"></rect><rect x="13" y="13" width="7" height="7" rx="2"></rect></svg>Agents</button>
       <button data-panel="calc">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"></rect><path d="M8 7h8M8 12h2M12 12h2M16 12h0M8 16h2M12 16h2M16 16h0"></path></svg>Calculs</button>
       <button data-panel="affaires">
