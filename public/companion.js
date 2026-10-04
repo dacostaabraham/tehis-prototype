@@ -8,7 +8,7 @@ export const ESPECES = [
   { id: 'tortue', nom: 'Tortue' }
 ];
 
-export const HUMEURS = { repos: 'Au repos', ecoute: 'Je réponds', reflechit: 'Je réfléchis', travaille: 'Je calcule', fete: 'Terminé !', parle: 'Je parle' };
+export const HUMEURS = { repos: 'Au repos', ecoute: 'Je réponds', reflechit: 'Je réfléchis', travaille: 'Je calcule', cherche: 'Je cherche…', fete: 'Terminé !', parle: 'Je parle' };
 
 export async function mountCompanion(container, especeInitiale) {
   const reduit = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -59,11 +59,38 @@ export async function mountCompanion(container, especeInitiale) {
   const anneauMat = new THREE.MeshBasicMaterial({ color: 0x0e7c86, transparent: true, opacity: 0.8, depthWrite: false });
   const onde = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.0, 64), anneauMat);
   onde.rotation.x = -Math.PI / 2; onde.position.y = 0.01; scene.add(onde);
-  const anneauTravail = new THREE.Mesh(new THREE.TorusGeometry(1.15, 0.025, 8, 80, Math.PI * 1.4), anneauMat);
-  anneauTravail.rotation.x = Math.PI / 2; anneauTravail.position.y = 1.0; scene.add(anneauTravail);
   const points = new THREE.Group();
   for (let i = 0; i < 3; i++) points.add(new THREE.Mesh(new THREE.SphereGeometry(0.07 + i * 0.025, 16, 12), new THREE.MeshBasicMaterial({ color: 0x0e7c86 })));
   scene.add(points);
+  // Radar de recherche (humeur « cherche ») : trois anneaux sonar décalés.
+  const radarMat = new THREE.MeshBasicMaterial({ color: 0x0e7c86, transparent: true, opacity: 0.7, depthWrite: false, side: THREE.DoubleSide });
+  const radars = new THREE.Group();
+  for (let i = 0; i < 3; i++) {
+    const r = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.62, 48), radarMat.clone());
+    r.rotation.x = -Math.PI / 2; r.position.y = 0.012; r.userData.decalage = i / 3;
+    radars.add(r);
+  }
+  scene.add(radars);
+  // Petit portable (humeur « travaille ») : le compagnon tape sur son clavier.
+  const portable = new THREE.Group();
+  const plastique = new THREE.MeshStandardMaterial({ color: 0x3a444e, roughness: 0.45, metalness: 0.35 });
+  const base = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.07, 0.8), plastique);
+  base.position.y = 0.035; portable.add(base);
+  const coque = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.74, 0.06), plastique);
+  coque.position.set(0, 0.4, -0.4); coque.rotation.x = -0.18; portable.add(coque);
+  const dalleMat = new THREE.MeshBasicMaterial({ color: 0x0e7c86 });
+  const dalle = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.6), dalleMat);
+  dalle.position.set(0, 0.4, -0.365); dalle.rotation.x = -0.18; portable.add(dalle);
+  const lignes = new THREE.Group(); // fausses lignes de texte sur l'écran
+  const ligneMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
+  [0.72, 0.5, 0.34, 0.2].forEach((larg, i) => {
+    const l = new THREE.Mesh(new THREE.PlaneGeometry(larg, 0.045), ligneMat);
+    l.position.set(-0.5 + larg / 2 + 0.06, 0.58 - i * 0.13, -0.362);
+    l.rotation.x = -0.18; lignes.add(l);
+  });
+  portable.add(lignes);
+  portable.position.set(0.1, 0, 1.05);
+  scene.add(portable);
   const confettis = new THREE.Group();
   const couleurs = [0xf2c14e, 0xe4572e, 0x4fb7c0, 0x76b041, 0xe48fa6];
   for (let i = 0; i < 40; i++) {
@@ -74,7 +101,13 @@ export async function mountCompanion(container, especeInitiale) {
   scene.add(confettis);
 
   const couleurAccent = () => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#0E7C86';
-  const appliquerTheme = () => { const c = new THREE.Color(couleurAccent()); anneauMat.color.copy(c); points.children.forEach((p) => p.material.color.copy(c)); };
+  const appliquerTheme = () => {
+    const c = new THREE.Color(couleurAccent());
+    anneauMat.color.copy(c);
+    points.children.forEach((p) => p.material.color.copy(c));
+    radars.children.forEach((r) => r.material.color.copy(c));
+    dalleMat.color.copy(c);
+  };
   appliquerTheme();
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', appliquerTheme);
 
@@ -160,6 +193,7 @@ export async function mountCompanion(container, especeInitiale) {
     if (humeur === 'ecoute') rz = 0.1 * Math.sin(t * 2.4) * A;
     if (humeur === 'reflechit') { ry = 0.4 * Math.sin(t * 0.8) * A; rz = 0.06; rx = -0.05; }
     if (humeur === 'travaille') { rx = 0.08; rz = 0.03 * Math.sin(t * 9) * A; }
+    if (humeur === 'cherche') { ry = 0.55 * Math.sin(t * 1.1) * A; rx = 0.1; rz = 0.04 * Math.sin(t * 2.2) * A; }
     if (humeur === 'parle') { rx = -0.06 - 0.05 * elan * A; rz = 0.06 * Math.sin(t * 2.7) * A; ry = 0.12 * Math.sin(t * 1.1) * A; }
     corps.rotation.z = lerp(corps.rotation.z, rz, 0.08);
     corps.rotation.y = lerp(corps.rotation.y, ry, 0.08);
@@ -168,9 +202,24 @@ export async function mountCompanion(container, especeInitiale) {
     onde.visible = humeur === 'ecoute' || humeur === 'parle';
     if (onde.visible) { const k = (t * 0.8) % 1; onde.scale.setScalar(0.9 + k * 1.4); anneauMat.opacity = 0.8 * (1 - k); } else anneauMat.opacity = 0.8;
     points.visible = humeur === 'reflechit';
-    if (points.visible) points.children.forEach((p, i) => { const a = t * 2.2 * (A || 0.001) + i * 2.1; p.position.set(Math.cos(a) * 0.55, 2.9 + Math.sin(t * 3 + i) * 0.06, Math.sin(a) * 0.55); });
-    anneauTravail.visible = humeur === 'travaille';
-    if (anneauTravail.visible) anneauTravail.rotation.z = t * 2.4 * A;
+    if (points.visible) points.children.forEach((p, i) => {
+      const a = t * 2.2 * (A || 0.001) + i * 2.1;
+      p.position.set(Math.cos(a) * 0.55, 2.9 + Math.sin(t * 3 + i) * 0.06, Math.sin(a) * 0.55);
+      p.scale.setScalar(1 + 0.35 * Math.sin(t * 4 + i * 2.1) * A); // pulsation « réflexion »
+    });
+    // Radar de recherche : anneaux sonar qui partent du compagnon.
+    radars.visible = humeur === 'cherche';
+    if (radars.visible) radars.children.forEach((r) => {
+      const k = (t * 0.55 + r.userData.decalage) % 1;
+      r.scale.setScalar(0.6 + k * 2.2);
+      r.material.opacity = 0.65 * (1 - k);
+    });
+    // Portable : visible quand le compagnon travaille, écran qui scintille, frappe du clavier.
+    portable.visible = humeur === 'travaille';
+    if (portable.visible) {
+      ligneMat.opacity = 0.75 + 0.2 * Math.sin(t * 9) * A; // scintillement du texte
+      portable.position.y = Math.abs(Math.sin(t * 9)) * 0.03 * A;
+    }
     confettis.visible = humeur === 'fete' && !reduit && dh < 3.5;
     if (confettis.visible) confettis.children.forEach((c) => { const u = c.userData; u.y -= dt * u.v; if (u.y < 0) u.y = 3.8; c.position.set(u.x + Math.sin(t + u.s) * 0.2, u.y, u.z); c.rotation.set(t * 3 + u.s, t * 2 + u.s, 0); });
     if (humeur === 'fete' && dh > 3.5) { humeur = 'repos'; container.dispatchEvent(new CustomEvent('mood', { detail: 'repos' })); }

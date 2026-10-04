@@ -28,7 +28,7 @@ export async function reponseDemo(agent, message, { nomCompagnon, send, store, f
   // Recherche de lieux : fonctionne réellement en démo (OpenStreetMap, sans IA).
   const lieu = /pharmac/i.test(message) ? 'pharmacie' : /h[oô]pital/i.test(message) ? 'hopital' : /centre de sant|clinique|dispensaire/i.test(message) ? 'centre_sante' : /laborat/i.test(message) ? 'laboratoire' : null;
   if (lieu && ['sante', 'compagnon'].includes(agent)) {
-    send('mood', { mood: 'travaille' });
+    send('mood', { mood: 'cherche' });
     const r = await chercherLieux({ categorie: lieu }, { position });
     const dire = async (t) => { for (const mot of t.split(/(\s+)/)) { send('token', { text: mot }); await pause(14); } };
     if (r.type === 'besoin_position') {

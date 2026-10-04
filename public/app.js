@@ -299,7 +299,7 @@ async function chercherDirect(demande, quartier = '') {
       return ajouterItem({ type: 'position', data: { ...demande, direct: true } });
     }
   }
-  humeur('travaille');
+  humeur('cherche');
   const n = noteActivite(`Recherche : ${demande.libelle.toLowerCase()}${quartier ? ` près de ${quartier}` : ' autour de toi'}…`);
   $('#messages').appendChild(n);
   try {
