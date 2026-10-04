@@ -1,17 +1,22 @@
 // Site de prélancement : compagnon 3D, agents, démo tontine, exemples d'agents, inscription.
 import { AGENTS, NOMS_OFFRES } from '/shared/agents.js';
 import { tontine } from '/shared/budget.js';
+import { vignetteAgent, logoTehis } from '/shared/identite.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fcfa = (n) => `${new Intl.NumberFormat('fr-FR').format(Math.round(n))} FCFA`;
 const reduit = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+/* ---------- Marque : logo partagé avec l'app ---------- */
+const marque = $('.marque');
+if (marque) marque.innerHTML = `${logoTehis(30)}<span>Tehis<span>.</span></span>`;
+
 /* ---------- Agents (catalogue partagé avec l'app) ---------- */
 const ordre = ['vendeur', 'finance', 'budget', 'redaction', 'emploi', 'demarches', 'repetiteur', 'organisation'];
 $('#grille-agents').innerHTML = ordre.map((id) => {
   const a = AGENTS[id];
-  return `<article class="agent"><span class="icone" aria-hidden="true">${a.icone}</span><h3>${esc(a.nom)}</h3><p>${esc(a.resume)}</p><span class="offre-min">${a.offre === 'gratuit' ? 'Inclus gratuitement' : `Offre ${esc(NOMS_OFFRES[a.offre])}`}</span></article>`;
+  return `<article class="agent">${vignetteAgent(id)}<h3>${esc(a.nom)}</h3><p>${esc(a.resume)}</p><span class="offre-min">${a.offre === 'gratuit' ? 'Inclus gratuitement' : `Offre ${esc(NOMS_OFFRES[a.offre])}`}</span></article>`;
 }).join('');
 
 /* ---------- Démo tontine ---------- */
@@ -23,7 +28,8 @@ function calculerTontine() {
     const r = tontine({ membres: Number(d.membres), cotisation: Number(d.cotisation), position: Number(d.position), frequence: d.frequence });
     zone.innerHTML = `<p class="gros">${fcfa(r.cagnotte)}<small>reçus au tour ${r.position}</small></p>
       <div class="tours" aria-hidden="true">${r.tours.slice(0, 30).map((t) => `<span class="${t.beneficiaire === 'toi' ? 'toi' : t.tour < r.position ? 'avant' : ''}">${t.tour}</span>`).join('')}</div>
-      <p class="lecture">${esc(r.lecture)}</p><p class="alerte">${esc(r.risque)}</p>`;
+      <p class="lecture">${esc(r.lecture)}</p><p class="alerte">${esc(r.risque)}</p>
+      <p class="pont"><a class="btn secondaire" href="#rejoindre">Faire mon vrai budget dans l'app →</a></p>`;
   } catch (e) {
     zone.innerHTML = `<p class="alerte">${esc(e.message)}</p>`;
   }
@@ -193,3 +199,16 @@ $('#copier').addEventListener('click', async (e) => {
   try { await navigator.clipboard.writeText($('#lien').value); e.target.textContent = 'Copié'; } catch { $('#lien').select(); }
   setTimeout(() => { e.target.textContent = 'Copier'; }, 1800);
 });
+
+/* ---------- Barre d'inscription fixe (mobile, trafic social) ---------- */
+(() => {
+  const barre = $('#cta-fixe');
+  const hero = $('.hero');
+  const cible = $('#rejoindre');
+  if (!barre || !hero || !cible || !('IntersectionObserver' in window)) return;
+  let heroVisible = true;
+  let cibleVisible = false;
+  const maj = () => { barre.hidden = heroVisible || cibleVisible; };
+  new IntersectionObserver(([e]) => { heroVisible = e.isIntersecting; maj(); }, { threshold: 0.15 }).observe(hero);
+  new IntersectionObserver(([e]) => { cibleVisible = e.isIntersecting; maj(); }, { threshold: 0.2 }).observe(cible);
+})();
