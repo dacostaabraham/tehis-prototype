@@ -81,7 +81,7 @@ export function versLieux(elements, centre, max = 10) {
 }
 
 const cache = new Map();
-const TTL = 15 * 60_000;
+const TTL = 2 * 60 * 60_000; // les lieux bougent peu : 2 h de cache
 function enCache(cle, valeur) {
   if (valeur !== undefined) { cache.set(cle, { t: Date.now(), v: valeur }); if (cache.size > 300) cache.delete(cache.keys().next().value); return valeur; }
   const c = cache.get(cle);
@@ -134,16 +134,18 @@ export async function chercherLieux(input = {}, ctx = {}, fetchImpl = fetch) {
     return { erreur: 'La recherche de quartier est indisponible pour le moment.' };
   }
 
-const DELAI_OVERPASS = 60_000; // les miroirs publics répondent souvent en 15-30 s
+const DELAI_PHASE = 15_000; // par miroir et par phase : les succès mesurés prennent 1 à 8 s ; au-delà, la phase suivante réessaie
+const PHASES_RAYON = [800, 2000, 5000]; // mètres : du plus rapide au plus large
+const SEUIL_PHASE = 4; // assez de résultats → inutile d'élargir
 
 /** Interroge les miroirs Overpass en parallèle : le premier succès gagne, sans attendre les retardataires. */
-function interrogerOverpass(corps, fetchImpl) {
+function interrogerOverpass(corps, fetchImpl, delai = DELAI_PHASE) {
   const options = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `data=${encodeURIComponent(corps)}` };
   return new Promise((resolve, reject) => {
     let echecs = 0;
     let derniere = null;
     for (const serveur of OVERPASS) {
-      appel(serveur, options, fetchImpl, DELAI_OVERPASS).then(
+      appel(serveur, options, fetchImpl, delai).then(
         (res) => resolve(Array.isArray(res.elements) ? res.elements : []),
         (e) => { echecs += 1; derniere = e; if (echecs >= OVERPASS.length) reject(derniere); }
       );
@@ -163,13 +165,26 @@ function erreurReseau(e) {
   const cle = `lieux|${input.categorie}|${centre.lat.toFixed(3)}|${centre.lng.toFixed(3)}|${rayon}`;
   let elements = enCache(cle);
   if (elements === undefined) {
-    const m = Math.round(rayon * 1000);
-    const corps = `[out:json][timeout:45];(${cat.filtres.map((f) => `nwr${f}(around:${m},${centre.lat},${centre.lng});`).join('')});out center tags 80;`;
-    try {
-      elements = enCache(cle, await interrogerOverpass(corps, fetchImpl));
-    } catch (e) {
-      return { erreur: erreurReseau(e) };
+    // Recherche par phases : une petite zone répond en quelques secondes même quand les
+    // serveurs sont chargés (une grande zone dense se fait rejeter en 504). On élargit
+    // uniquement si la phase précédente a rapporté trop peu de résultats.
+    const rayonMax = Math.round(rayon * 1000);
+    const phases = [...new Set([800, 2000, 5000, rayonMax].filter((m) => m <= rayonMax))].sort((a, b) => a - b);
+    let derniereErreur = null;
+    elements = [];
+    for (const m of phases) {
+      const corps = `[out:json][timeout:20];(${cat.filtres.map((f) => `nwr${f}(around:${m},${centre.lat},${centre.lng});`).join('')});out center tags 80;`;
+      try {
+        elements = await interrogerOverpass(corps, fetchImpl);
+        derniereErreur = null;
+        // Seuil sur les lieux utilisables (nommés, dédupliqués), pas sur les éléments bruts.
+        if (versLieux(elements, centre).length >= SEUIL_PHASE || m === phases[phases.length - 1]) break;
+      } catch (e) {
+        derniereErreur = e; // on tente la phase suivante : une saturation passagère peut se résorber
+      }
     }
+    if (derniereErreur && !elements.length) return { erreur: erreurReseau(derniereErreur) };
+    enCache(cle, elements);
   }
 
   const lieux = versLieux(elements, centre);
