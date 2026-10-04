@@ -4,6 +4,7 @@ import { pointMort, fixerPrix, projection12Mois, cascadeRentabilite, estimationB
 import { budgetMensuel, planEpargne, tontine, EXEMPLES_BUDGET } from '../public/shared/budget.js';
 import { creerDocument } from './outils/documents.js';
 import { executerOrganisation } from './outils/organisation.js';
+import { chercherLieux } from './outils/lieux.js';
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -23,7 +24,26 @@ const INTROS = {
   dev: "Mode démo : le mode développeur a besoin de la clé API, puis de tes clés GitHub et Render dans les réglages. Il écrit le code, l'envoie sur ton dépôt et déploie sur Render, toujours après ta validation."
 };
 
-export async function reponseDemo(agent, message, { nomCompagnon, send, store, fiche }) {
+export async function reponseDemo(agent, message, { nomCompagnon, send, store, fiche, position }) {
+  // Recherche de lieux : fonctionne réellement en démo (OpenStreetMap, sans IA).
+  const lieu = /pharmac/i.test(message) ? 'pharmacie' : /h[oô]pital/i.test(message) ? 'hopital' : /centre de sant|clinique|dispensaire/i.test(message) ? 'centre_sante' : /laborat/i.test(message) ? 'laboratoire' : null;
+  if (lieu && ['sante', 'compagnon'].includes(agent)) {
+    send('mood', { mood: 'travaille' });
+    const r = await chercherLieux({ categorie: lieu }, { position });
+    const dire = async (t) => { for (const mot of t.split(/(\s+)/)) { send('token', { text: mot }); await pause(14); } };
+    if (r.type === 'besoin_position') {
+      await dire("Pour trouver ce qu'il y a autour de toi, partage ta position, ou écris ton quartier.");
+      send('position', { categorie: r.categorie, libelle: r.libelle });
+    } else if (r.erreur) {
+      await dire(r.erreur);
+    } else {
+      const p1 = r.lieux[0];
+      await dire(p1 ? `J'ai trouvé ${r.total} ${r.libelle.toLowerCase()} dans un rayon de ${r.rayonKm} km. La plus proche : ${p1.nom}, à ${p1.distance < 1000 ? `${p1.distance} m` : `${(p1.distance / 1000).toFixed(1).replace('.', ',')} km`}.` : `Je n'ai rien trouvé dans un rayon de ${r.rayonKm} km.`);
+      send('tool', { name: 'chercher_lieux', input: { categorie: lieu }, result: r });
+    }
+    send('mood', { mood: 'fete' });
+    return;
+  }
   const texte = (message || '').toLowerCase();
   const nom = nomCompagnon || 'Kiki';
   let intro = '';

@@ -12,6 +12,8 @@ import { creerCoffre } from './coffre.js';
 import { initNotifications } from './notifications.js';
 import { creerDocument, TYPES_DOCUMENTS } from './outils/documents.js';
 import { executerOrganisation } from './outils/organisation.js';
+import { chercherLieux, positionValide } from './outils/lieux.js';
+import { preparerChoix } from './outils/interaction.js';
 import { executerDev, preparerAction, OUTILS_A_VALIDER, SCHEMAS_DEV } from './outils/dev.js';
 import { OUTILS_FINANCE } from '../public/shared/finance.js';
 import { OUTILS_BUDGET } from '../public/shared/budget.js';
@@ -198,6 +200,18 @@ app.post('/api/actions/:id', async (req, res) => {
   res.json({ statut, resultat });
 });
 
+/* ---------- Lieux à proximité (accès direct, sans IA) ---------- */
+const appelsLieux = new Map();
+app.get('/api/lieux', async (req, res) => {
+  const now = Date.now();
+  const l = (appelsLieux.get(req.ip) || []).filter((t) => now - t < 60_000);
+  if (l.length >= 10) return res.status(429).json({ erreur: 'Trop de recherches en une minute. Attends un peu.' });
+  l.push(now); appelsLieux.set(req.ip, l);
+  const position = { lat: Number(req.query.lat), lng: Number(req.query.lng) };
+  const r = await chercherLieux({ categorie: String(req.query.categorie || ''), pres_de: req.query.pres_de ? String(req.query.pres_de) : '', rayon_km: Number(req.query.rayon) || 3 }, { position });
+  res.status(r.erreur ? 400 : 200).json(r);
+});
+
 /* ---------- Agents personnalisés ---------- */
 const jourAbidjan = () => new Date().toISOString().slice(0, 10);
 async function etatPersos() {
@@ -277,7 +291,7 @@ function nettoyerHistorique(messages) {
 }
 
 /** Exécute un outil client. Renvoie ce que voit le modèle et l'événement à envoyer à l'app. */
-async function executerOutil(agent, nom, input = {}) {
+async function executerOutil(agent, nom, input = {}, ctx = {}) {
   if (nom === 'retenir') {
     if (!memoireAutorisee(input?.fait)) return { resultat: { enregistre: false, raison: 'Fait vide, trop long ou sensible : non enregistré.' } };
     const m = await store.addMemory({ fait: input.fait.trim(), categorie: input.categorie || 'profil' });
@@ -296,6 +310,18 @@ async function executerOutil(agent, nom, input = {}) {
   if (['creer_rappel', 'lister_rappels', 'supprimer_rappel', 'gerer_liste', 'lister_listes'].includes(nom)) {
     const r = await executerOrganisation(store, nom, input);
     return { resultat: r, evenement: r.type && !r.erreur ? ['tool', { name: nom, input, result: r }] : null };
+  }
+  if (nom === 'chercher_lieux') {
+    const r = await chercherLieux(input, ctx);
+    if (r.erreur) return { resultat: r };
+    if (r.type === 'besoin_position') return { resultat: r, evenement: ['position', { categorie: r.categorie, libelle: r.libelle }] };
+    // Le modèle reçoit une version courte (noms, distances) ; la carte complète part à l'app.
+    const court = { libelle: r.libelle, centre: r.centre.libelle, total: r.total, lieux: r.lieux.map((l) => ({ nom: l.nom, distance_m: l.distance, telephone: l.telephone, horaires: l.horaires })), note: r.note, affiche: 'La carte et la liste sont affichées avec Y aller et Appeler.' };
+    return { resultat: court, evenement: ['tool', { name: nom, input, result: r }] };
+  }
+  if (nom === 'poser_choix') {
+    const c = preparerChoix(input);
+    return c.erreur ? { resultat: c } : { resultat: { affiche: true, consigne: "Les boutons sont affichés. Attends la réponse de l'utilisateur." }, evenement: ['choix', c] };
   }
   if (nom === 'suggerer_agent') {
     if (!AGENTS[input.agent]) return { resultat: { erreur: 'Agent inconnu.' } };
@@ -359,6 +385,9 @@ app.post('/api/chat', limite, async (req, res) => {
     if (!acces.ok) return res.status(403).json({ erreur: acces.raison });
   }
   const historique = nettoyerHistorique(req.body?.messages);
+  // Position partagée par l'app (facultative), utilisée seulement pour chercher des lieux proches.
+  const pos = req.body?.position;
+  const position = positionValide(pos) ? { lat: Number(pos.lat), lng: Number(pos.lng) } : null;
   if (!historique.length || historique.at(-1).role !== 'user') return res.status(400).json({ erreur: 'Message manquant.' });
 
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -376,7 +405,7 @@ app.post('/api/chat', limite, async (req, res) => {
   try {
     if (!anthropic) {
       const dernier = historique.at(-1).content;
-      await reponseDemo(agent, typeof dernier === 'string' ? dernier : dernier.at(-1).text, { nomCompagnon: p.nomCompagnon, send, store, fiche });
+      await reponseDemo(agent, typeof dernier === 'string' ? dernier : dernier.at(-1).text, { nomCompagnon: p.nomCompagnon, send, store, fiche, position });
       send('done', { demo: true });
       return res.end();
     }
@@ -384,7 +413,7 @@ app.post('/api/chat', limite, async (req, res) => {
     const souvenirs = (await store.listMemories()).slice(0, 40);
     const system = [
       { type: 'text', text: fiche ? instructionsPerso(fiche) : instructionsStatiques(agent), cache_control: { type: 'ephemeral' } },
-      { type: 'text', text: contexteDynamique({ ...p, souvenirs }) }
+      { type: 'text', text: contexteDynamique({ ...p, souvenirs, positionPartagee: Boolean(position) }) }
     ];
     let listeOutils = fiche ? outilsPerso(fiche) : outils(agent);
     if (fiche) await store.incrementUsage(jourAbidjan(), 'perso');
@@ -431,7 +460,7 @@ app.post('/api/chat', limite, async (req, res) => {
       const resultats = [];
       for (const bloc of msg.content.filter((b) => b.type === 'tool_use')) {
         send('mood', { mood: 'travaille' });
-        const { resultat, evenement } = await executerOutil(agent, bloc.name, bloc.input);
+        const { resultat, evenement } = await executerOutil(agent, bloc.name, bloc.input, { position });
         if (evenement) send(...evenement);
         resultats.push({ type: 'tool_result', tool_use_id: bloc.id, content: JSON.stringify(resultat), ...(resultat?.erreur ? { is_error: true } : {}) });
       }

@@ -6,6 +6,8 @@ import { SCHEMAS_OUTILS_BUDGET } from '../public/shared/budget.js';
 import { SCHEMA_DOCUMENT } from './outils/documents.js';
 import { SCHEMAS_ORGANISATION } from './outils/organisation.js';
 import { OUTIL_MEMOIRE, OUTIL_RECHERCHE_WEB, REGLES_COMMUNES } from './agents.js';
+import { SCHEMA_LIEUX } from './outils/lieux.js';
+import { SCHEMA_CHOIX } from './outils/interaction.js';
 
 const texte = (v, max) => (typeof v === 'string' ? v.replace(/\u0000/g, '').trim().slice(0, max) : '');
 const liste = (v, n, max) => (Array.isArray(v) ? v : typeof v === 'string' ? v.split('\n') : []).map((x) => texte(x, max)).filter(Boolean).slice(0, n);
@@ -77,7 +79,8 @@ export function outilsPerso(f) {
   if (f.outils.includes('budget')) o.push(...SCHEMAS_OUTILS_BUDGET);
   if (f.outils.includes('finance')) o.push(...SCHEMAS_OUTILS_FINANCE);
   if (f.outils.includes('recherche_web')) o.push(OUTIL_RECHERCHE_WEB);
-  o.push(OUTIL_MEMOIRE);
+  if (f.outils.includes('lieux')) o.push(SCHEMA_LIEUX);
+  o.push(SCHEMA_CHOIX, OUTIL_MEMOIRE);
   return o;
 }
 

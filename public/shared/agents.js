@@ -52,6 +52,8 @@ export const AGENTS = {
     resume: 'CNI, passeport, entreprise, impôts : étapes et pièces',
     intro: "Je t'explique les démarches en Côte d'Ivoire : étapes, pièces à fournir, coûts et délais. Je vérifie sur internet et je te donne mes sources, car les règles changent souvent.",
     suggestions: ['Comment créer mon entreprise ?', 'Refaire ma carte d\'identité', 'Demander un passeport', 'Déclarer mes impôts de petite entreprise']
+,
+    actions: [{ categorie: 'mairie', libelle: 'Mairies' }, { categorie: 'police', libelle: 'Commissariats' }, { categorie: 'poste', libelle: 'Poste' }, { categorie: 'banque', libelle: 'Banques' }]
   },
   repetiteur: {
     nom: 'Répétiteur scolaire', icone: '📚', groupe: 'quotidien', offre: 'gratuit', modele: 'fort',
@@ -69,13 +71,16 @@ export const AGENTS = {
     nom: 'Santé au quotidien', icone: '🩺', groupe: 'quotidien', offre: 'gratuit', modele: 'fort', recherche: true,
     resume: 'Infos santé pratiques, pharmacies, quand consulter',
     intro: "Je te donne des infos santé pratiques pour la vie de tous les jours : que faire en cas de fièvre, où trouver une pharmacie de garde, quand aller au centre de santé. Je ne fais pas de diagnostic, je t'oriente vers un pro.",
-    suggestions: ['Que faire en cas de fièvre chez un enfant ?', 'Pharmacie de garde près de moi ce soir', 'Quand faut-il aller au centre de santé ?', 'Rappelle-moi de prendre mon traitement à 8 h']
+    suggestions: ['Pharmacie de garde près de moi ce soir', 'Que faire en cas de fièvre chez un enfant ?', 'Quand faut-il aller au centre de santé ?', 'Rappelle-moi de prendre mon traitement à 8 h'],
+    actions: [{ categorie: 'pharmacie', libelle: 'Pharmacies' }, { categorie: 'centre_sante', libelle: 'Centres de santé' }, { categorie: 'hopital', libelle: 'Hôpitaux' }, { categorie: 'laboratoire', libelle: 'Laboratoires' }]
   },
   logement: {
     nom: 'Logement et déménagement', icone: '🏠', groupe: 'quotidien', offre: 'plus', modele: 'leger',
     resume: 'Recherche, visite, bail, caution, déménagement à Abidjan',
     intro: "Je t'aide à trouver un logement à Abidjan sans te faire avoir : où chercher, que vérifier en visite, bail et caution, et organisation du déménagement.",
     suggestions: ['Checklist pour visiter un studio à Cocody', 'Que vérifier avant de payer la caution ?', 'Modèle de reçu de caution', 'Organise mon déménagement']
+,
+    actions: [{ categorie: 'marche', libelle: 'Marchés' }, { categorie: 'ecole', libelle: 'Écoles' }, { categorie: 'pharmacie', libelle: 'Pharmacies' }, { categorie: 'supermarche', libelle: 'Supermarchés' }, { categorie: 'transfert_argent', libelle: 'Transfert d\'argent' }]
   },
   dev: {
     nom: 'Mode développeur', icone: '⌨️', groupe: 'dev', offre: 'pro', modele: 'fort', developpeur: true,
@@ -104,6 +109,7 @@ export function accesAgent(id, profil = {}) {
 export const OUTILS_PERSO = {
   documents: { nom: 'Documents', resume: 'Lettres, fiches, messages prêts à copier, partager ou mettre en PDF', offre: 'gratuit' },
   rappels: { nom: 'Rappels et listes', resume: 'Programmer des rappels, tenir des listes', offre: 'gratuit' },
+  lieux: { nom: 'Lieux à proximité', resume: 'Trouver pharmacies, marchés, banques… autour de l\'utilisateur, sur une carte', offre: 'gratuit' },
   budget: { nom: 'Calculs budget', resume: 'Budget du mois, épargne, tontine', offre: 'gratuit' },
   finance: { nom: 'Calculs entreprise', resume: 'Point mort, prix, prévisionnel, BFR', offre: 'plus' },
   recherche_web: { nom: 'Recherche sur internet', resume: 'Vérifier une information récente, avec sources', offre: 'pro' }

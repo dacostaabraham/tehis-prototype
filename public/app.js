@@ -8,6 +8,7 @@ import { voixDisponible, parler, arreter, debloquer } from './voix.js';
 import { markdown, echapper } from './shared/markdown.js';
 import { carteResultat, carteDocument, carteSuggestion, carteOffreDev, carteValidation, noteActivite, blocSources, blocListe, brancherListes, actionsDocument, dateFr } from './cards.js';
 import { toast } from './shared/ui.js';
+import { carteLieux, cartePosition, carteChoix, barreProximite, obtenirPosition, positionConnue } from './lieux.js';
 
 const $ = (s) => document.querySelector(s);
 const etat = { agent: 'compagnon', profil: {}, statut: {}, compagnon: null, envoi: false, photo: null, persos: { agents: [], limites: { agents: 1 }, offre: 'gratuit' } };
@@ -202,6 +203,39 @@ function ouvrirPanneau(p) {
 
 /* ---------- Chat ---------- */
 const cleHisto = (agent = etat.agent) => `tehis_chat_${agent}`;
+/* ---------- Lieux à proximité ---------- */
+// Recherche directe (boutons « Autour de moi ») : sans IA, gratuite, marche aussi en mode démo.
+async function chercherDirect(demande, quartier = '') {
+  debloquer();
+  const cle = cleHisto();
+  const items = lsGet(cle, []);
+  const ajouterItem = (it) => { items.push(it); lsSet(cle, items.slice(-80)); rendreItem(it, items); $('#messages').scrollTop = $('#messages').scrollHeight; };
+  let pos = null;
+  if (!quartier) {
+    try { pos = await obtenirPosition(); } catch (e) {
+      toast(e.message, 5000);
+      return ajouterItem({ type: 'position', data: { ...demande, direct: true } });
+    }
+  }
+  humeur('travaille');
+  const n = noteActivite(`Recherche : ${demande.libelle.toLowerCase()}${quartier ? ` près de ${quartier}` : ' autour de toi'}…`);
+  $('#messages').appendChild(n);
+  try {
+    const qs = new URLSearchParams({ categorie: demande.categorie, ...(quartier ? { pres_de: quartier } : { lat: pos.lat, lng: pos.lng }) });
+    const r = await api(`/api/lieux?${qs}`);
+    n.remove();
+    ajouterItem({ type: 'tool', result: r });
+    humeur('fete');
+  } catch (e) {
+    n.remove(); humeur('repos');
+    toast(e.message, 5000);
+  }
+}
+const ctxPosition = {
+  parPosition: (d) => (d.direct ? chercherDirect(d) : envoyer(`Voici ma position : cherche les ${String(d.libelle || 'lieux').toLowerCase()} les plus proches.`)),
+  parQuartier: (d, q) => (d.direct ? chercherDirect(d, q) : envoyer(`Cherche les ${String(d.libelle || 'lieux').toLowerCase()} près de ${q}.`))
+};
+
 const ctxCartes = {
   api,
   choisirAgent: (id) => { if (accesAgent(id, etat.profil).ok) choisirAgent(id); else ouvrirDialogueDev(); },
@@ -210,7 +244,10 @@ const ctxCartes = {
 
 function rendreItem(it, items) {
   const zone = $('#messages');
-  if (it.type === 'tool') zone.appendChild(carteResultat(it.result, ctxCartes));
+  if (it.type === 'tool' && it.result?.type === 'lieux') zone.appendChild(carteLieux(it.result));
+  else if (it.type === 'tool') zone.appendChild(carteResultat(it.result, ctxCartes));
+  else if (it.type === 'position') zone.appendChild(cartePosition(it.data, ctxPosition));
+  else if (it.type === 'choix') zone.appendChild(carteChoix(it, { envoyer: (t) => envoyer(t), ecrire: () => $('#input').focus(), sauver: () => lsSet(cleHisto(), items) }));
   else if (it.type === 'document') zone.appendChild(carteDocument(it.doc));
   else if (it.type === 'suggestion') zone.appendChild(carteSuggestion(it.data, ctxCartes));
   else if (it.type === 'devoffer') zone.appendChild(carteOffreDev(ctxCartes));
@@ -270,6 +307,12 @@ function afficherHistorique() {
     if (etat.agent === 'compagnon') zone.appendChild(grilleDecouverte());
   }
   for (const it of items) rendreItem(it, items);
+  $('#proximite')?.remove();
+  if (a.actions?.length) {
+    const barre = barreProximite(a.actions, { chercher: (act) => chercherDirect({ categorie: act.categorie, libelle: act.libelle }) });
+    barre.id = 'proximite';
+    $('#suggestions').before(barre);
+  }
   const sug = $('#suggestions');
   sug.innerHTML = '';
   for (const s of a.suggestions) {
@@ -432,7 +475,7 @@ async function envoyer(texte, { auto = false, agent = etat.agent } = {}) {
   const nouvelleBulle = () => { bulle = visible ? ajouterBulle('bot', '') : document.createElement('div'); bulle.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>'; };
 
   try {
-    const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ agent, messages: conversation }) });
+    const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ agent, messages: conversation, position: positionConnue() }) });
     if (!r.ok || !r.body) { const d = await r.json().catch(() => ({})); throw new Error(d.erreur || `Erreur ${r.status}`); }
     const lecteur = r.body.getReader();
     const dec = new TextDecoder();
@@ -450,7 +493,7 @@ async function envoyer(texte, { auto = false, agent = etat.agent } = {}) {
           courant += data.text;
           bulle.innerHTML = markdown(courant) || '<span class="typing"><i></i><i></i><i></i></span>';
         } else if (evt === 'mood') humeur(data.mood);
-        else if (['tool', 'document', 'suggestion', 'devoffer', 'approval', 'activite', 'sources', 'memory'].includes(evt)) {
+        else if (['tool', 'document', 'suggestion', 'devoffer', 'approval', 'activite', 'sources', 'memory', 'choix', 'position'].includes(evt)) {
           coupure();
           if (evt === 'tool') ajouter({ type: 'tool', result: data.result });
           if (evt === 'document') ajouter({ type: 'document', doc: data });
@@ -460,6 +503,8 @@ async function envoyer(texte, { auto = false, agent = etat.agent } = {}) {
           if (evt === 'activite') ajouter({ type: 'activite', texte: data.texte });
           if (evt === 'sources') ajouter({ type: 'sources', sources: data.sources });
           if (evt === 'memory') ajouter({ type: 'memory', fait: data.fait });
+          if (evt === 'choix') ajouter({ type: 'choix', data, reponse: null });
+          if (evt === 'position') ajouter({ type: 'position', data });
           nouvelleBulle();
         } else if (evt === 'error') erreur = data.message;
         zone.scrollTop = zone.scrollHeight;

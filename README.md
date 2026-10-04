@@ -25,6 +25,8 @@ Compagnon IA en 3D avec des **agents du quotidien** pour la Côte d'Ivoire, et u
 - **Documents** : lettres, CV, fiches produits et fiches de révision s'affichent dans une carte avec *Copier*, *WhatsApp* et *PDF*, et restent dans « Mes affaires ».
 - **Voix du compagnon** : il lit ses réponses à voix haute (voix française du téléphone, hauteur et débit selon l'espèce) et s'anime pendant qu'il parle (humeur « Je parle »). Bouton haut-parleur sur la scène pour couper ou remettre, bouton « Écouter » sous chaque réponse, test dans Réglages.
 - **Photo** jointe à un message (produit, exercice, document) et **dictée vocale** (si le navigateur la propose).
+- **Autour de moi** (Santé, Démarches, Logement, Compagnon, agents perso) : pharmacies, centres de santé, hôpitaux, mairies, marchés… sur une carte (OpenStreetMap) avec distance, *Y aller* (voiture, à pied, transport), *Appeler* et *Partager*. Position partagée à la demande, ou quartier écrit. Fonctionne sans clé API.
+- **Boutons de réponse rapide** : les agents proposent des choix à toucher (quiz du répétiteur, budget, quartier…), avec « Autre… » pour écrire.
 - **Calculs** sans IA : *Mon foyer* (budget, épargne, tontine) et *Mon entreprise* (point mort, prix, prévisionnel, BFR, cascade).
 - **Mes affaires** : rappels, listes à cocher, documents, et ce que le compagnon retient (bouton « Oublier »).
 - **Mode démo** automatique tant qu'aucune clé API n'est configurée : chaque agent montre un exemple.
@@ -77,6 +79,7 @@ Compagnon IA en 3D avec des **agents du quotidien** pour la Côte d'Ivoire, et u
 | `OFFRE_TEST` | Offre du testeur : `gratuit`, `plus` ou `pro` | `pro` |
 | `DATABASE_URL` | PostgreSQL (fourni par Render) | vide = mémoire vive |
 | `SESSION_SECRET` | Cookie et chiffrement des clés (généré par Render) | aléatoire |
+| `OVERPASS_URL`, `NOMINATIM_URL` | Serveurs OpenStreetMap (lieux, quartiers) | serveurs publics |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Clés des notifications | générées et gardées en base |
 
 ## Lancer en local
@@ -85,7 +88,7 @@ Compagnon IA en 3D avec des **agents du quotidien** pour la Côte d'Ivoire, et u
 npm install
 APP_PASSWORD=test npm start          # mode démo sur http://localhost:3000
 ANTHROPIC_API_KEY=sk-ant-... npm start
-npm test                             # 37 tests : finance, budget, tontine, outils, mode dev simulé, agents perso
+npm test                             # 66 tests : finance, budget, tontine, outils, lieux, mode dev simulé, agents perso
 ```
 
 Tester la boucle d'outils sans clé ni réseau, avec un faux serveur Anthropic :

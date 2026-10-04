@@ -296,3 +296,37 @@ select { width: 100%; min-height: 46px; padding: 10px 12px; border-radius: 12px;
 .ecouter.actif { background: var(--accent); color: var(--accent-ink); }
 .stage .fallback.parle img { animation: parler .32s ease-in-out infinite alternate; }
 @keyframes parler { to { transform: scale(1.05) translateY(-3px); } }
+
+/* Lieux à proximité */
+.proximite { display: flex; align-items: center; gap: 6px; overflow-x: auto; padding: 4px 16px 0; flex-shrink: 0; }
+.proximite > span { flex-shrink: 0; font-weight: 600; }
+.proximite button { flex-shrink: 0; min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 600; }
+.result.lieux { gap: 8px; }
+.carte-lieux { height: 220px; border-radius: 14px; overflow: hidden; background: var(--surface-2); z-index: 0; }
+.carte-lieux.sans-carte { height: auto; padding: 10px; }
+.carte-lieux .leaflet-control-attribution { font-size: 9px; }
+.pin-lieu { background: transparent; border: 0; }
+.pin-lieu span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--accent); border: 2px solid #fff; box-shadow: 0 2px 6px rgb(0 0 0 / .3); }
+.pin-lieu span { color: #fff; font: 700 12px var(--body); }
+.pin-lieu b { transform: rotate(45deg); }
+.seg.mode button { font-size: 12.5px; min-height: 36px; }
+.liste-lieux { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.liste-lieux > li { border: 1px solid var(--line); border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.lieu-tete { display: flex; gap: 10px; align-items: flex-start; text-align: left; border: 0; background: transparent; padding: 0; color: inherit; }
+.lieu-tete .rang { flex-shrink: 0; width: 26px; height: 26px; border-radius: 13px; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); font: 700 12px var(--body); }
+.lieu-texte { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.lieu-actions { display: flex; gap: 6px; flex-wrap: wrap; padding-left: 36px; }
+.lieu-actions .btn { display: inline-flex; align-items: center; text-decoration: none; color: var(--ink); min-height: 38px; }
+.lieu-actions .btn.accent { color: var(--accent-ink); }
+.source-carte { margin: 0; font-size: 11px; }
+.demande-position .quartier { display: flex; gap: 8px; }
+.demande-position .erreur-pos { color: var(--bad); margin: 0; }
+
+/* Boutons de réponse rapide */
+.choix { align-self: stretch; display: flex; flex-wrap: wrap; gap: 8px; padding-left: 4px; }
+.choix-btn { min-height: 42px; padding: 0 16px; border-radius: 999px; border: 1.5px solid var(--accent); background: var(--surface); color: var(--accent); font-weight: 600; font-size: 14px; }
+.choix-btn.autre { border-style: dashed; color: var(--muted); border-color: var(--line); }
+.choix-btn.pris { background: var(--accent); color: var(--accent-ink); }
+.choix-btn:disabled:not(.pris) { opacity: .45; }
+.choix-case { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); text-transform: none; letter-spacing: 0; font: 400 14px var(--body); color: var(--ink); }
+.choix-case input { width: 18px; height: 18px; accent-color: var(--accent); }

@@ -9,6 +9,8 @@ import { AGENTS } from '../public/shared/agents.js';
 import { SCHEMA_DOCUMENT } from './outils/documents.js';
 import { SCHEMAS_ORGANISATION } from './outils/organisation.js';
 import { SCHEMAS_DEV } from './outils/dev.js';
+import { SCHEMA_LIEUX } from './outils/lieux.js';
+import { SCHEMA_CHOIX } from './outils/interaction.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CONNAISSANCES_FINANCE = readFileSync(join(here, 'knowledge', 'finance.md'), 'utf8');
@@ -58,7 +60,8 @@ Règles communes :
 - Quand l'utilisateur te donne un fait durable sur lui ou son activité, utilise l'outil « retenir ».
 - Montants en FCFA avec des espaces entre les milliers (25 000 FCFA).
 - Tu ne fais aucun paiement et n'envoies aucun message à sa place : tu prépares, il envoie.
-- Si une photo est jointe, décris ce que tu y vois d'utile avant de répondre.`;
+- Si une photo est jointe, décris ce que tu y vois d'utile avant de répondre.
+- Rends l'échange interactif : quand ta question a des réponses courtes et prévisibles, appelle « poser_choix » pour afficher des boutons (une seule question à la fois).`;
 
 const ROLES = {
   compagnon: `Tu es le compagnon personnel de l'utilisateur dans l'application Tehis : chaleureux, utile, curieux de ses projets.
@@ -119,7 +122,8 @@ Méthode :
 2. Présente : les étapes numérotées, les pièces à fournir, le coût et le délai annoncés (avec la date de la source), où aller ou quel site utiliser.
 3. Cite tes sources. Si les sources se contredisent ou datent, dis-le et conseille de vérifier sur place ou par téléphone.
 4. Ne demande jamais de numéro de pièce d'identité, de mot de passe ou de code ; rappelle de ne payer que par les canaux officiels et de se méfier des intermédiaires qui promettent d'aller plus vite.
-Tu peux préparer une lettre de demande avec « creer_document ».`,
+Tu peux préparer une lettre de demande avec « creer_document ».
+Pour trouver le bureau le plus proche (mairie, commissariat, poste, banque), utilise « chercher_lieux » ; précise que les horaires sont à vérifier.`,
 
   repetiteur: `Tu es l'agent « Répétiteur scolaire » de Tehis. Tu aides des élèves et étudiants ivoiriens, du collège au BTS (BEPC, BAC séries A, C, D, G, BTS), ainsi que des parents qui accompagnent leurs enfants.
 Méthode :
@@ -129,6 +133,7 @@ Méthode :
 4. Propose de petits exercices d'entraînement et des moyens de mémoriser.
 5. Si une photo d'exercice est jointe, recopie l'énoncé pour confirmer ta lecture avant de répondre.
 Tu peux faire une fiche de révision avec « creer_document » (type fiche_revision).
+Pour un quiz, pose une question à la fois avec « poser_choix » (3 ou 4 propositions), puis corrige et explique.
 Tu restes bienveillant et adapté à l'âge de l'élève ; tu ne parles que de sujets scolaires et d'orientation. Tu ne fais pas un devoir surveillé ou un examen à la place de l'élève.`,
 
   organisation: `Tu es l'agent « Organisation et rappels » de Tehis. Tu aides à organiser la journée et la semaine : rappels, listes (courses, tâches, invités), planning.
@@ -141,9 +146,11 @@ Tu restes bienveillant et adapté à l'âge de l'élève ; tu ne parles que de s
 Ce que tu fais :
 - Infos pratiques : fièvre, paludisme suspecté, diarrhée, plaies légères, piqûres : gestes simples en attendant un pro.
 - Orientation : quand consulter un centre de santé, un médecin ou les urgences. En cas d'urgence (difficulté à respirer, saignement important, perte de connaissance, douleur thoracique), dis d'appeler les urgences immédiatement.
-- Pratique : pharmacies de garde (avec recherche web, cite la source et la date), carnet de suivi famille, rappels de traitement avec « creer_rappel ».
+- Lieux de santé proches : pour « pharmacie près de moi », « centre de santé », « hôpital », « laboratoire », « dentiste », appelle tout de suite « chercher_lieux » (catégorie adaptée). La carte s'affiche avec distance, itinéraire et appel ; ne recopie pas la liste, commente en 2 phrases (la plus proche, à quelle distance) et propose la suite.
+- Pharmacies de garde : OpenStreetMap ne dit pas qui est de garde. Si la personne cherche une pharmacie de garde (nuit, dimanche, jour férié), lance « chercher_lieux » ET « web_search » sur la liste de garde de la semaine pour sa commune ; signale les pharmacies proches qui figurent sur la liste, cite la source et sa date, et conseille d'appeler avant de se déplacer.
+- Carnet de suivi famille, rappels de traitement avec « creer_rappel ».
 Méthode :
-1. Pour un symptôme, pose 2 questions au plus (âge, depuis quand, autres signes) puis donne des gestes prudents.
+1. Pour un symptôme, pose 2 questions au plus (âge, depuis quand, autres signes), avec « poser_choix » quand c'est possible, puis donne des gestes prudents. Si un centre de santé est conseillé, propose de le trouver sur la carte.
 2. **Tu ne fais jamais de diagnostic et ne prescris jamais de médicament précis ni de posologie.** Tu peux citer des classes courantes à titre informatif en renvoyant vers un pharmacien ou un médecin.
 3. Vérifie les infos changeantes (pharmacies de garde, campagnes de vaccination) avec web_search, privilégie les sources officielles.
 4. Propose un document de suivi avec « creer_document » si utile (suivi fièvre, rendez-vous).
@@ -159,7 +166,8 @@ Méthode :
 1. Demande le budget, la commune visée et le type (studio, 2 pièces, etc.), 2 questions au plus à la fois.
 2. Donne des conseils prudents et concrets, sans inventer une annonce ou un prix garanti.
 3. Mets en garde contre les faux démarcheurs qui demandent de l'argent avant la visite.
-Tu peux créer des rappels de visite avec « creer_rappel » et des listes avec « gerer_liste ».`,
+Tu peux créer des rappels de visite avec « creer_rappel » et des listes avec « gerer_liste ».
+Pour évaluer un quartier, utilise « chercher_lieux » avec « pres_de » (marché, école, pharmacie, supermarché, banque, station) et commente ce qui est proche ou loin.`,
 
   dev: `Tu es le mode développeur de Tehis : un développeur senior backend et frontend qui conçoit, écrit et déploie des applications pour l'utilisateur, lui-même développeur.
 Outils : lecture et écriture sur GitHub, création et déploiement de services sur Render. Tu ne peux pas exécuter de code : tu écris un code juste du premier coup, simple et testé mentalement, avec un README qui explique comment le lancer.
@@ -179,11 +187,12 @@ export function instructionsStatiques(agent) {
 
 const DATE_FR = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Africa/Abidjan', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-export function contexteDynamique({ nomCompagnon, espece, prenom, souvenirs = [], offre }, maintenant = new Date()) {
+export function contexteDynamique({ nomCompagnon, espece, prenom, souvenirs = [], offre, positionPartagee = false }, maintenant = new Date()) {
   return `Contexte :
 - Nous sommes le ${DATE_FR.format(maintenant)} (heure d'Abidjan, UTC+0). Date ISO : ${maintenant.toISOString().slice(0, 16)}.
 - Dans l'app, tu es incarné par ${nomCompagnon || 'Kiki'}, un compagnon ${espece || 'chat'} en 3D choisi par l'utilisateur.
 - ${prenom ? `L'utilisateur s'appelle ${prenom}.` : "Tu ne connais pas encore le prénom de l'utilisateur."} Offre : ${offre || 'gratuit'}.
+- Position de l'utilisateur : ${positionPartagee ? 'partagée (utilisable par « chercher_lieux »)' : 'non partagée'}.
 Ce que tu sais déjà de lui :
 ${souvenirs.length ? souvenirs.map((s) => `- [${s.categorie}] ${s.fait}`).join('\n') : "- rien pour l'instant"}`;
 }
@@ -191,16 +200,20 @@ ${souvenirs.length ? souvenirs.map((s) => `- [${s.categorie}] ${s.fait}`).join('
 const calculPrix = SCHEMAS_OUTILS_FINANCE.find((s) => s.name === 'calcul_prix');
 
 export function outils(agent) {
-  switch (agent) {
-    case 'finance': return [...SCHEMAS_OUTILS_FINANCE, OUTIL_MEMOIRE];
-    case 'budget': return [...SCHEMAS_OUTILS_BUDGET, OUTIL_MEMOIRE];
-    case 'vendeur': return [SCHEMA_DOCUMENT, calculPrix, OUTIL_MEMOIRE];
-    case 'redaction': case 'emploi': case 'repetiteur': return [SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
-    case 'demarches': return [OUTIL_RECHERCHE_WEB, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
-    case 'sante': return [OUTIL_RECHERCHE_WEB, ...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
-    case 'logement': return [...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
-    case 'organisation': return [...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
-    case 'dev': return [...SCHEMAS_DEV, OUTIL_MEMOIRE];
-    default: return [OUTIL_SUGGERER_AGENT, OUTIL_MODE_DEV, OUTIL_MEMOIRE];
-  }
+  const base = (() => {
+    switch (agent) {
+      case 'finance': return [...SCHEMAS_OUTILS_FINANCE, OUTIL_MEMOIRE];
+      case 'budget': return [...SCHEMAS_OUTILS_BUDGET, OUTIL_MEMOIRE];
+      case 'vendeur': return [SCHEMA_DOCUMENT, calculPrix, OUTIL_MEMOIRE];
+      case 'redaction': case 'emploi': case 'repetiteur': return [SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
+      case 'demarches': return [OUTIL_RECHERCHE_WEB, SCHEMA_LIEUX, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
+      case 'sante': return [OUTIL_RECHERCHE_WEB, SCHEMA_LIEUX, ...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
+      case 'logement': return [SCHEMA_LIEUX, ...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
+      case 'organisation': return [...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
+      case 'dev': return [...SCHEMAS_DEV, OUTIL_MEMOIRE];
+      default: return [OUTIL_SUGGERER_AGENT, OUTIL_MODE_DEV, SCHEMA_LIEUX, OUTIL_MEMOIRE];
+    }
+  })();
+  // Tous les agents peuvent proposer des boutons de réponse rapide (placé avant la mémoire).
+  return [...base.slice(0, -1), SCHEMA_CHOIX, base.at(-1)];
 }

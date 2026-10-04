@@ -46,6 +46,16 @@ http.createServer((req, res) => {
     const dernier = b.messages.at(-1);
     const apresOutil = Array.isArray(dernier.content) && dernier.content.some((c) => c.type === 'tool_result');
 
+    const texteUser = JSON.stringify(b.messages.filter((m) => m.role === 'user').at(-1)?.content || '');
+    if (noms.includes('poser_choix') && /quiz/i.test(texteUser) && !apresOutil) {
+      return flux(res, [{ type: 'text', text: 'Question 1 : combien font 7 × 8 ?' }, { type: 'tool_use', id: 'toolu_c1', name: 'poser_choix', input: { question: '7 × 8 = ?', options: ['54', '56', '64'] } }], 'tool_use');
+    }
+    if (noms.includes('chercher_lieux') && /pharmacie/i.test(texteUser) && !apresOutil) {
+      return flux(res, [{ type: 'text', text: 'Je regarde autour de toi.' }, { type: 'tool_use', id: 'toolu_l1', name: 'chercher_lieux', input: { categorie: 'pharmacie' } }], 'tool_use');
+    }
+    if (apresOutil && dernier.content.some((c) => c.tool_use_id === 'toolu_c1' || c.tool_use_id === 'toolu_l1')) {
+      return flux(res, [{ type: 'text', text: dernier.content.some((c) => c.tool_use_id === 'toolu_c1') ? '' : 'Voici les plus proches. Appelle avant de te déplacer la nuit.' }].filter((x) => x.text), 'end_turn');
+    }
     if (noms.includes('web_search')) {
       if (dernier.role === 'user') {
         return flux(res, [
