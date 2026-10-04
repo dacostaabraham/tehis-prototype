@@ -65,11 +65,22 @@ test('Avec un quartier : géocodage Nominatim limité à la Côte d\'Ivoire', as
   assert.match(f.appels[0].url, /countrycodes=ci/);
 });
 
-test('Serveur Overpass en panne : bascule sur le second', async () => {
-  const f = fauxFetch([['kumi.systems', { elements: ELEMENTS }]]);
-  const r = await chercherLieux({ categorie: 'hopital' }, { position: { lat: 6.82, lng: -5.27 } }, f);
+test('Overpass : les miroirs sont interrogés en parallèle, le premier succès gagne', async () => {
+  const f = async (url) => {
+    if (url.includes('overpass-api.de')) await new Promise((r) => setTimeout(r, 30_000)); // miroir lent
+    return new Response(JSON.stringify({ elements: ELEMENTS }), { status: 200 });
+  };
+  const t0 = Date.now();
+  const r = await chercherLieux({ categorie: 'pharmacie' }, { position: { lat: 5.33641, lng: -4.02671 } }, f);
   assert.equal(r.type, 'lieux');
-  assert.equal(f.appels.length, 2);
+  assert.ok(Date.now() - t0 < 15_000, 'le miroir rapide doit gagner sans attendre le lent');
+});
+
+test('Overpass en panne partout : message lisible, sans jargon technique', async () => {
+  const f = async () => { const e = new Error('This operation was aborted'); e.name = 'AbortError'; throw e; };
+  const r = await chercherLieux({ categorie: 'pharmacie' }, { position: { lat: 6.82, lng: -5.27 } }, f);
+  assert.ok(r.erreur);
+  assert.ok(!/abort/i.test(r.erreur), r.erreur);
 });
 
 test('Catégorie inconnue et position invalide refusées', async () => {

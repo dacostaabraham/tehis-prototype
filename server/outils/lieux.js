@@ -134,20 +134,42 @@ export async function chercherLieux(input = {}, ctx = {}, fetchImpl = fetch) {
     return { erreur: 'La recherche de quartier est indisponible pour le moment.' };
   }
 
+const DELAI_OVERPASS = 60_000; // les miroirs publics répondent souvent en 15-30 s
+
+/** Interroge les miroirs Overpass en parallèle : le premier succès gagne, sans attendre les retardataires. */
+function interrogerOverpass(corps, fetchImpl) {
+  const options = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `data=${encodeURIComponent(corps)}` };
+  return new Promise((resolve, reject) => {
+    let echecs = 0;
+    let derniere = null;
+    for (const serveur of OVERPASS) {
+      appel(serveur, options, fetchImpl, DELAI_OVERPASS).then(
+        (res) => resolve(Array.isArray(res.elements) ? res.elements : []),
+        (e) => { echecs += 1; derniere = e; if (echecs >= OVERPASS.length) reject(derniere); }
+      );
+    }
+  });
+}
+
+/** Message d'erreur lisible pour l'utilisateur : jamais de jargon technique. */
+function erreurReseau(e) {
+  const msg = e && e.message ? String(e.message) : '';
+  if ((e && e.name === 'AbortError') || /aborted/i.test(msg)) {
+    return 'La recherche a pris trop de temps (serveurs très sollicités). Réessaie dans un instant.';
+  }
+  return 'La carte des lieux est indisponible pour le moment. Vérifie ta connexion puis réessaie.';
+}
+
   const cle = `lieux|${input.categorie}|${centre.lat.toFixed(3)}|${centre.lng.toFixed(3)}|${rayon}`;
   let elements = enCache(cle);
   if (elements === undefined) {
     const m = Math.round(rayon * 1000);
-    const corps = `[out:json][timeout:20];(${cat.filtres.map((f) => `nwr${f}(around:${m},${centre.lat},${centre.lng});`).join('')});out center tags 80;`;
-    let derniere;
-    for (const serveur of OVERPASS) {
-      try {
-        const res = await appel(serveur, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `data=${encodeURIComponent(corps)}` }, fetchImpl);
-        elements = enCache(cle, res.elements || []);
-        break;
-      } catch (e) { derniere = e; }
+    const corps = `[out:json][timeout:45];(${cat.filtres.map((f) => `nwr${f}(around:${m},${centre.lat},${centre.lng});`).join('')});out center tags 80;`;
+    try {
+      elements = enCache(cle, await interrogerOverpass(corps, fetchImpl));
+    } catch (e) {
+      return { erreur: erreurReseau(e) };
     }
-    if (elements === undefined) return { erreur: `La carte des lieux est indisponible pour le moment (${derniere?.message || 'réseau'}). Réessaie dans un instant.` };
   }
 
   const lieux = versLieux(elements, centre);
