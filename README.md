@@ -4,7 +4,9 @@ Compagnon IA en 3D avec des **agents du quotidien** pour la Côte d'Ivoire, et u
 
 ## Ce que fait le prototype
 
-- **PWA installable** sur Android et iPhone, protégée par un mot de passe de test.
+- **PWA installable** sur Android et iPhone.
+- **Comptes** : numéro WhatsApp + code secret (4 à 6 chiffres), code d'invitation pour la bêta privée. Chaque compte a ses propres discussions, documents, rappels, listes, souvenirs, agents et clés. Les discussions sont enregistrées sur le serveur et se retrouvent sur un autre téléphone.
+- **Quotas du jour** par offre (messages, recherches web), et modèle léger pour l'offre Gratuit.
 - **Compagnon 3D** au choix (chat, éléphant, perroquet, tortue) : on le fait tourner au doigt, il réagit quand il réfléchit, cherche, calcule ou termine.
 - **Agents** (bouton en haut à droite de l'écran) :
 
@@ -26,6 +28,10 @@ Compagnon IA en 3D avec des **agents du quotidien** pour la Côte d'Ivoire, et u
 - **Voix du compagnon** : il lit ses réponses à voix haute (voix française du téléphone, hauteur et débit selon l'espèce) et s'anime pendant qu'il parle (humeur « Je parle »). Bouton haut-parleur sur la scène pour couper ou remettre, bouton « Écouter » sous chaque réponse, test dans Réglages.
 - **Photo** jointe à un message (produit, exercice, document) et **dictée vocale** (si le navigateur la propose).
 - **Autour de moi** (Santé, Démarches, Logement, Compagnon, agents perso) : pharmacies, centres de santé, hôpitaux, mairies, marchés… sur une carte (OpenStreetMap) avec distance, *Y aller* (voiture, à pied, transport), *Appeler* et *Partager*. Position partagée à la demande, ou quartier écrit. Fonctionne sans clé API.
+- **Pharmacies de garde** : la liste officielle de la semaine (abidjan.net, Abidjan et villes de l'intérieur) est lue toutes les 6 heures et croisée avec la carte : onglet « 🌙 De garde » avec distance, téléphone et itinéraire, affiché en premier la nuit et le week-end. Les positions incohérentes de la source sont écartées (la pharmacie reste listée dans sa commune).
+- **Le compagnon grandit** : points (discussions, nouveaux agents, documents, rappels, recherches, calculs, visite du jour), 8 niveaux de « Petit » à « Légende », série de jours avec bonus, et accessoires 3D débloqués (foulard en pagne, bob, lunettes, médaille, couronne).
+- **Voix naturelle** (avec `OPENAI_API_KEY`) : chaque animal a sa voix (OpenAI), le compagnon s'anime au rythme du son, réécoute gratuite (cache). La dictée enregistre et transcrit avec le vocabulaire ivoirien. Sans clé, voix et dictée du téléphone.
+- **Tehis sur WhatsApp** : texte, vocaux, photos, position ; menu des agents, boutons de réponse, pharmacies de garde avec épingle, rappels et code oublié sur WhatsApp. Mise en place : [docs/WHATSAPP.md](docs/WHATSAPP.md).
 - **Boutons de réponse rapide** : les agents proposent des choix à toucher (quiz du répétiteur, budget, quartier…), avec « Autre… » pour écrire.
 - **Calculs** sans IA : *Mon foyer* (budget, épargne, tontine) et *Mon entreprise* (point mort, prix, prévisionnel, BFR, cascade).
 - **Mes affaires** : rappels, listes à cocher, documents, et ce que le compagnon retient (bouton « Oublier »).
@@ -61,10 +67,11 @@ Compagnon IA en 3D avec des **agents du quotidien** pour la Côte d'Ivoire, et u
    git push -u origin main
    ```
 2. Sur [dashboard.render.com](https://dashboard.render.com) : **New › Blueprint**, choisis le dépôt. Render lit `render.yaml` et crée le service web et la base PostgreSQL.
-3. Render demande deux valeurs :
-   - `APP_PASSWORD` : le mot de passe de test de ton choix ;
+3. Render demande ces valeurs :
+   - `CODE_INVITATION` : le code à donner à tes testeurs ;
+   - `ADMIN_TELEPHONE` : ton numéro ;
    - `ANTHROPIC_API_KEY` : ta clé de [console.anthropic.com](https://console.anthropic.com). **Laisse vide pour le mode démo.**
-4. Ouvre l'adresse `https://tehis-prototype-xxxx.onrender.com` sur ton téléphone, entre le mot de passe.
+4. Ouvre l'adresse `https://tehis-prototype-xxxx.onrender.com` sur ton téléphone et crée ton compte avec ton numéro (`ADMIN_TELEPHONE`).
 5. Pour l'installer : Chrome Android, menu **⋮ › Installer l'application** ; iPhone, Safari **Partager › Sur l'écran d'accueil** (nécessaire pour les notifications sur iPhone).
 6. Dans l'app : Réglages › Notifications › *Activer* pour recevoir les rappels.
 
@@ -72,23 +79,29 @@ Compagnon IA en 3D avec des **agents du quotidien** pour la Côte d'Ivoire, et u
 
 | Variable | Rôle | Défaut |
 | --- | --- | --- |
-| `APP_PASSWORD` | Mot de passe d'accès | aucun (accès libre) |
+| `CODE_INVITATION` | Code demandé à l'inscription (`APP_PASSWORD` est encore accepté) | vide = inscription ouverte |
+| `ADMIN_TELEPHONE` | Numéro de l'administrateur : son compte gère les testeurs et récupère les données de l'ancien prototype | vide = premier compte créé |
+| `OFFRE_DEFAUT` | Offre des nouveaux comptes | `gratuit` |
 | `ANTHROPIC_API_KEY` | Clé de l'API Claude | vide = mode démo |
 | `ANTHROPIC_MODEL` | Modèle « fort » (finance, démarches, répétiteur, dev) | `claude-sonnet-5-5` |
 | `ANTHROPIC_MODEL_LEGER` | Modèle « léger » (compagnon, rédaction, vendeur, emploi, budget, organisation) | `claude-haiku-4-5-20251001` |
-| `OFFRE_TEST` | Offre du testeur : `gratuit`, `plus` ou `pro` | `pro` |
 | `DATABASE_URL` | PostgreSQL (fourni par Render) | vide = mémoire vive |
 | `SESSION_SECRET` | Cookie et chiffrement des clés (généré par Render) | aléatoire |
 | `OVERPASS_URL`, `NOMINATIM_URL` | Serveurs OpenStreetMap (lieux, quartiers) | serveurs publics |
+| `OPENAI_API_KEY` | Voix naturelle et transcription | vide = voix du téléphone |
+| `OPENAI_TTS_MODEL`, `OPENAI_STT_MODEL` | Modèles de voix et de transcription | `gpt-4o-mini-tts`, `gpt-4o-mini-transcribe` |
+| `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_NUMERO` | WhatsApp Cloud API (voir docs/WHATSAPP.md) | vide = WhatsApp désactivé |
+| `WHATSAPP_MODELE_RAPPEL`, `WHATSAPP_MODELE_CODE` | Modèles approuvés : rappels hors 24 h, code oublié | vide |
+| `GARDE_URL` | Page de la liste des pharmacies de garde | business.abidjan.net |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Clés des notifications | générées et gardées en base |
 
 ## Lancer en local
 
 ```bash
 npm install
-APP_PASSWORD=test npm start          # mode démo sur http://localhost:3000
+CODE_INVITATION=test npm start       # mode démo sur http://localhost:3000
 ANTHROPIC_API_KEY=sk-ant-... npm start
-npm test                             # 66 tests : finance, budget, tontine, outils, lieux, mode dev simulé, agents perso
+npm test                             # tests : comptes et isolation, quotas, finance, budget, tontine, outils, lieux, mode dev simulé, agents perso
 ```
 
 Tester la boucle d'outils sans clé ni réseau, avec un faux serveur Anthropic :
@@ -105,7 +118,17 @@ ANTHROPIC_API_KEY=faux ANTHROPIC_BASE_URL=http://localhost:4999 npm start
 - **Dictée vocale** : elle dépend du navigateur (Chrome Android, Safari récent). Sinon, le clavier du téléphone a souvent un micro.
 - La 3D charge Three.js depuis internet (jsDelivr). Sans réseau ou sans WebGL, l'app affiche l'image de l'animal.
 - Les agents ne sont ni expert-comptable, ni conseiller fiscal, ni avocat : ils le rappellent quand c'est nécessaire.
-- Un seul utilisateur (prototype) : les comptes, Google, la passkey et le paiement Chariow viendront avec la V1. L'offre se règle avec `OFFRE_TEST`.
+- Comptes et offres : l'administrateur change l'offre d'un testeur et lui crée un code provisoire dans Réglages › Testeurs. Le paiement Chariow viendra ensuite.
+
+## Quotas par jour
+
+| Offre | Messages | Recherches web | Modèle des agents « forts » |
+| --- | --- | --- | --- |
+| Gratuit | 20 | 2 | léger |
+| Plus | 100 | 10 | fort |
+| Pro | 300 | 40 | fort |
+
+Réglés dans `public/shared/agents.js` (`QUOTAS`). L'administrateur n'a pas de limite. Le mode démo n'est pas décompté.
 - Les appels GitHub et Render sont testés avec des réponses simulées : fais un premier essai sur un dépôt de test.
 
 ## Structure
@@ -120,7 +143,14 @@ server/notifications.js      notifications push et vérification des rappels
 server/coffre.js             chiffrement des clés GitHub et Render
 server/knowledge/finance.md  base de connaissances tirée du Module 5
 server/demo.js               réponses du mode démo
-server/store.js              PostgreSQL ou mémoire vive
+server/store.js              PostgreSQL ou mémoire vive, données séparées par compte
+server/comptes.js            numéro, code secret, sessions, essais limités
+server/quotas.js             quotas du jour et choix du modèle
+server/outils/garde.js       pharmacies de garde de la semaine
+server/voix-ia.js            voix naturelle et transcription (OpenAI)
+server/whatsapp.js           WhatsApp Cloud API : envoi, webhook, signature
+server/canal-whatsapp.js     conversations, rappels et codes sur WhatsApp
+public/shared/progression.js points, niveaux, série, accessoires
 public/shared/               catalogue des agents, moteurs finance et budget, rendu Markdown (serveur + app)
 public/app.js, cards.js      interface et cartes
 public/companion.js          compagnon 3D
@@ -135,3 +165,13 @@ Page publique avec le compagnon 3D, les agents, un calcul de tontine, les tarifs
 - **Admin** : `https://<site>/admin` (identifiant libre, mot de passe `ADMIN_PASSWORD`), avec export CSV pour Excel.
 - `CONTACT_EMAIL` (facultatif) : adresse affichée dans la page Confidentialité.
 - En local : `ADMIN_PASSWORD=test node site/server.js` puis http://localhost:3100.
+
+## Quotas de voix par jour
+
+| Offre | Voix naturelle (caractères lus) | Dictées |
+| --- | --- | --- |
+| Gratuit | 3 000 | 10 |
+| Plus | 20 000 | 60 |
+| Pro | 60 000 | 200 |
+
+Au-delà, la voix du téléphone prend le relais. Réglés dans `server/voix-ia.js` (`QUOTAS_VOIX`).

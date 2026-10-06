@@ -4,6 +4,14 @@
 export const OFFRES = ['gratuit', 'plus', 'pro'];
 export const NOMS_OFFRES = { gratuit: 'Gratuit', plus: 'Plus', pro: 'Pro Entrepreneur' };
 
+// Quotas par jour et par compte, tous agents confondus (les agents perso ont en plus leur propre limite).
+// modeleFort : les agents marqués « fort » utilisent le modèle fort ; sinon tout passe par le modèle léger.
+export const QUOTAS = {
+  gratuit: { messages: 20, recherches: 2, modeleFort: false },
+  plus: { messages: 100, recherches: 10, modeleFort: true },
+  pro: { messages: 300, recherches: 40, modeleFort: true }
+};
+
 export const GROUPES = [
   { id: 'base', nom: 'Ton compagnon' },
   { id: 'travail', nom: 'Travail et argent' },
@@ -72,7 +80,7 @@ export const AGENTS = {
     resume: 'Infos santé pratiques, pharmacies, quand consulter',
     intro: "Je te donne des infos santé pratiques pour la vie de tous les jours : que faire en cas de fièvre, où trouver une pharmacie de garde, quand aller au centre de santé. Je ne fais pas de diagnostic, je t'oriente vers un pro.",
     suggestions: ['Pharmacie de garde près de moi ce soir', 'Que faire en cas de fièvre chez un enfant ?', 'Quand faut-il aller au centre de santé ?', 'Rappelle-moi de prendre mon traitement à 8 h'],
-    actions: [{ categorie: 'pharmacie', libelle: 'Pharmacies' }, { categorie: 'centre_sante', libelle: 'Centres de santé' }, { categorie: 'hopital', libelle: 'Hôpitaux' }, { categorie: 'laboratoire', libelle: 'Laboratoires' }]
+    actions: [{ categorie: 'pharmacie', garde: true, libelle: '🌙 De garde' }, { categorie: 'pharmacie', libelle: 'Pharmacies' }, { categorie: 'centre_sante', libelle: 'Centres de santé' }, { categorie: 'hopital', libelle: 'Hôpitaux' }, { categorie: 'laboratoire', libelle: 'Laboratoires' }]
   },
   logement: {
     nom: 'Logement et déménagement', icone: '🏠', groupe: 'quotidien', offre: 'plus', modele: 'leger',

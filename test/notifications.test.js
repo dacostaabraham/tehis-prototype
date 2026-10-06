@@ -17,12 +17,12 @@ function fauxStore(rappels = [], abonnements = []) {
   return {
     rappels: rappels.map((r) => ({ ...r })),
     abos: [...abonnements],
-    async getSecret() { return null; },
-    async setSecret() {},
+    async getSecretServeur() { return null; },
+    async setSecretServeur() {},
     async listSubscriptions() { return [...this.abos]; },
     async deleteSubscription(endpoint) { this.abos = this.abos.filter((a) => a.endpoint !== endpoint); },
     async dueReminders(iso) { return this.rappels.filter((r) => !r.envoye && r.quand <= iso); },
-    async updateReminder(id, champs) {
+    async updateReminderGlobal(id, champs) {
       const r = this.rappels.find((x) => x.id === id);
       Object.assign(r, champs);
       return r;

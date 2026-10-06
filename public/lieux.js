@@ -47,56 +47,104 @@ const minutesAPied = (m) => Math.max(1, Math.round(m / 75)); // ~4,5 km/h
 const itineraire = (l, mode) => `https://www.google.com/maps/dir/?api=1&destination=${l.lat},${l.lng}&travelmode=${mode}`;
 const lienCarte = (l) => `https://www.google.com/maps/search/?api=1&query=${l.lat},${l.lng}`;
 
-/** Carte d'un résultat « lieux ». */
+const itineraireTexte = (l, mode) => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${l.nom}, ${l.commune || ''}, Côte d'Ivoire`)}&travelmode=${mode}`;
+/** « du 3 octobre au 9 octobre 2026 » → « du 3 au 9 octobre ». */
+const periodeCourte = (t) => {
+  const m = /du (\d+) (\p{L}+) au (\d+) (\p{L}+)/u.exec(t || '');
+  if (!m) return 'cette semaine';
+  return m[2] === m[4] ? `du ${m[1]} au ${m[3]} ${m[4]}` : `du ${m[1]} ${m[2]} au ${m[3]} ${m[4]}`;
+};
+const aPosition = (l) => Number.isFinite(l.lat) && Number.isFinite(l.lng);
+const allerVers = (l, mode) => (aPosition(l) ? itineraire(l, mode) : itineraireTexte(l, mode));
+
+/** Carte d'un résultat « lieux ». Pour les pharmacies : onglets « De garde » et « Toutes ». */
 export function carteLieux(r) {
   const el = document.createElement('div');
   el.className = 'result lieux';
   let mode = 'driving';
-  el.innerHTML = `<div class="result-head"><span class="result-title">${echapper(r.icone || '📍')} ${echapper(r.libelle)}</span><span class="muted small">${r.total} à moins de ${r.rayonKm} km</span></div>
+  const gardes = r.garde?.pharmacies || [];
+  const onglets = gardes.length ? [
+    { id: 'garde', titre: `🌙 De garde (${gardes.length})`, lieux: gardes.map((g) => ({ ...g, garde: true })) },
+    { id: 'toutes', titre: `Toutes (${r.lieux.length})`, lieux: r.lieux }
+  ] : [{ id: 'toutes', lieux: r.lieux }];
+  let actif = onglets.find((o) => o.id === (r.gardeDAbord ? 'garde' : 'toutes')) || onglets[0];
+
+  el.innerHTML = `<div class="result-head"><span class="result-title">${echapper(r.icone || '📍')} ${echapper(r.libelle)}</span><span class="muted small" data-compte></span></div>
     <p class="small muted">Autour de ${echapper(r.centre.libelle)}</p>
+    ${onglets.length > 1 ? `<div class="seg onglets-lieux" role="tablist" aria-label="Quelles pharmacies">${onglets.map((o) => `<button type="button" role="tab" data-onglet="${o.id}">${echapper(o.titre)}</button>`).join('')}</div>` : ''}
     <div class="carte-lieux" role="img" aria-label="Carte des ${echapper(r.libelle.toLowerCase())} proches"></div>
     <div class="seg mode" role="radiogroup" aria-label="Moyen de déplacement">
       <button type="button" role="radio" aria-checked="true" data-mode="driving">🚗 Voiture</button>
       <button type="button" role="radio" aria-checked="false" data-mode="walking">🚶 À pied</button>
       <button type="button" role="radio" aria-checked="false" data-mode="transit">🚌 Transport</button>
     </div>
-    <ol class="liste-lieux">${r.lieux.map((l, i) => `<li data-i="${i}">
-      <button type="button" class="lieu-tete" data-voir="${i}"><span class="rang">${i + 1}</span><span class="lieu-texte"><strong>${echapper(l.nom)}</strong>
-        <span class="small muted">${distanceTexte(l.distance)} · ${minutesAPied(l.distance)} min à pied${l.adresse ? ` · ${echapper(l.adresse)}` : ''}</span>
+    <ol class="liste-lieux"></ol>
+    ${r.note ? `<div class="alert">${echapper(r.note)}</div>` : ''}
+    <p class="small muted source-carte">Carte © contributeurs OpenStreetMap${r.garde ? ` · Garde : <a href="${echapper(r.garde.source)}" target="_blank" rel="noopener">abidjan.net</a>` : ''}. Horaires et numéros à vérifier.</p>`;
+
+  const liste = el.querySelector('.liste-lieux');
+  const zone = el.querySelector('.carte-lieux');
+  let carte = null, L = null, calque = null, marqueurs = [];
+
+  function rendreListe() {
+    const lieux = actif.lieux;
+    el.querySelector('[data-compte]').textContent = actif.id === 'garde' ? periodeCourte(r.garde.periode) : `${r.total} à moins de ${r.rayonKm} km`;
+    el.querySelectorAll('[data-onglet]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.onglet === actif.id)));
+    liste.innerHTML = lieux.map((l, i) => {
+      const loin = l.distance === null || l.distance === undefined;
+      const infos = loin ? `${l.commune ? `${echapper(l.commune)} · ` : ''}distance inconnue` : `${distanceTexte(l.distance)} · ${minutesAPied(l.distance)} min à pied${l.commune && actif.id === 'garde' ? ` · ${echapper(l.commune)}` : ''}`;
+      return `<li data-i="${i}">
+      <button type="button" class="lieu-tete" data-voir="${i}"${aPosition(l) ? '' : ' disabled'}><span class="rang">${i + 1}</span><span class="lieu-texte"><strong>${echapper(l.nom)}</strong>${l.garde ? ' <span class="badge-garde">De garde</span>' : ''}
+        <span class="small muted">${infos}</span>
+        ${l.adresse ? `<span class="small muted">${echapper(l.adresse)}</span>` : ''}
         ${l.horaires ? `<span class="small muted">Horaires : ${echapper(l.horaires)}</span>` : ''}</span></button>
       <div class="lieu-actions">
-        <a class="btn small accent" data-aller="${i}" href="${itineraire(l, mode)}" target="_blank" rel="noopener">Y aller</a>
+        <a class="btn small accent" data-aller="${i}" href="${allerVers(l, mode)}" target="_blank" rel="noopener">Y aller</a>
         ${l.telephone ? `<a class="btn small" href="tel:${echapper(l.telephone.replace(/[^\d+]/g, ''))}">Appeler</a>` : ''}
-        <a class="btn small" href="https://wa.me/?text=${encodeURIComponent(`${l.nom} (${distanceTexte(l.distance)}) : ${lienCarte(l)}`)}" target="_blank" rel="noopener">Partager</a>
-      </div></li>`).join('') || '<li class="muted small">Rien trouvé dans ce rayon. Essaie un autre quartier.</li>'}</ol>
-    ${r.note ? `<div class="alert">${echapper(r.note)}</div>` : ''}
-    <p class="small muted source-carte">Données © contributeurs OpenStreetMap. Horaires et numéros à vérifier.</p>`;
+        <a class="btn small" href="https://wa.me/?text=${encodeURIComponent(`${l.nom}${l.garde ? ' (de garde)' : ''}${l.telephone ? ` · ${l.telephone}` : ''} : ${aPosition(l) ? lienCarte(l) : allerVers(l, 'driving')}`)}" target="_blank" rel="noopener">Partager</a>
+      </div></li>`;
+    }).join('') || '<li class="muted small">Rien trouvé dans ce rayon. Essaie un autre quartier.</li>';
+    liste.querySelectorAll('[data-voir]').forEach((b) => b.addEventListener('click', () => {
+      const m = marqueurs[Number(b.dataset.voir)];
+      if (carte && m) { carte.flyTo(m.getLatLng(), 17, { duration: 0.6 }); m.openPopup(); zone.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    }));
+    rendreMarqueurs();
+  }
 
+  function rendreMarqueurs() {
+    if (!carte) return;
+    calque.clearLayers();
+    marqueurs = actif.lieux.map((l, i) => (aPosition(l)
+      ? L.marker([l.lat, l.lng], { icon: L.divIcon({ className: `pin-lieu${l.garde ? ' garde' : ''}`, html: `<span><b>${i + 1}</b></span>`, iconSize: [28, 28], iconAnchor: [14, 28] }) })
+        .addTo(calque).bindPopup(`<strong>${echapper(l.nom)}</strong><br>${l.distance != null ? distanceTexte(l.distance) : echapper(l.commune || '')}`)
+      : null));
+    const points = [[r.centre.lat, r.centre.lng], ...actif.lieux.filter(aPosition).slice(0, 5).map((l) => [l.lat, l.lng])];
+    carte.fitBounds(points, { padding: [28, 28], maxZoom: 16 });
+  }
+
+  el.querySelectorAll('[data-onglet]').forEach((b) => b.addEventListener('click', () => {
+    actif = onglets.find((o) => o.id === b.dataset.onglet);
+    rendreListe();
+  }));
   el.querySelectorAll('.mode button').forEach((b) => b.addEventListener('click', () => {
     mode = b.dataset.mode;
     el.querySelectorAll('.mode button').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
-    el.querySelectorAll('[data-aller]').forEach((a) => { a.href = itineraire(r.lieux[Number(a.dataset.aller)], mode); });
+    el.querySelectorAll('[data-aller]').forEach((a) => { a.href = allerVers(actif.lieux[Number(a.dataset.aller)], mode); });
   }));
 
   // Carte : la position (ou le quartier) au centre, chaque lieu numéroté.
-  const zone = el.querySelector('.carte-lieux');
-  let carte = null, marqueurs = [];
-  chargerLeaflet().then((L) => {
-    if (!zone.isConnected) return;
+  chargerLeaflet().then((Lf) => {
+    if (!zone.isConnected && !document.body.contains(el)) { /* rendu hors écran : on dessine quand même */ }
+    L = Lf;
     carte = L.map(zone, { zoomControl: false, attributionControl: true, scrollWheelZoom: false, tap: true });
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(carte);
     L.circleMarker([r.centre.lat, r.centre.lng], { radius: 8, color: '#fff', weight: 3, fillColor: '#2563EB', fillOpacity: 1 }).addTo(carte).bindTooltip(r.origine === 'position' ? 'Toi' : r.centre.libelle);
-    marqueurs = r.lieux.map((l, i) => L.marker([l.lat, l.lng], { icon: L.divIcon({ className: 'pin-lieu', html: `<span><b>${i + 1}</b></span>`, iconSize: [28, 28], iconAnchor: [14, 28] }) })
-      .addTo(carte).bindPopup(`<strong>${echapper(l.nom)}</strong><br>${distanceTexte(l.distance)}`));
-    const points = [[r.centre.lat, r.centre.lng], ...r.lieux.slice(0, 5).map((l) => [l.lat, l.lng])];
-    carte.fitBounds(points, { padding: [28, 28], maxZoom: 16 });
+    calque = L.layerGroup().addTo(carte);
+    rendreMarqueurs();
     new ResizeObserver(() => carte.invalidateSize()).observe(zone);
   }).catch(() => { zone.innerHTML = '<p class="small muted">La carte n\'a pas pu se charger. La liste ci-dessous reste utilisable.</p>'; zone.classList.add('sans-carte'); });
 
-  el.querySelectorAll('[data-voir]').forEach((b) => b.addEventListener('click', () => {
-    const i = Number(b.dataset.voir);
-    if (carte && marqueurs[i]) { carte.flyTo(marqueurs[i].getLatLng(), 17, { duration: 0.6 }); marqueurs[i].openPopup(); zone.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-  }));
+  rendreListe();
   return el;
 }
 

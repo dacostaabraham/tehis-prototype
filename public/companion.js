@@ -26,7 +26,8 @@ export async function mountCompanion(container, especeInitiale) {
     return {
       setMood(m) { humeur = m; div.classList.toggle('parle', m === 'parle'); },
       async setSpecies(e) { espece = e; div.querySelector('img').src = `/pets/${e}.jpg`; },
-      impulsion() {}
+      impulsion() {},
+      setAccessoires() {}
     };
   };
 
@@ -111,6 +112,95 @@ export async function mountCompanion(container, especeInitiale) {
   appliquerTheme();
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', appliquerTheme);
 
+  /* ---------- Accessoires (débloqués en faisant grandir le compagnon) ---------- */
+  // Repères par espèce (modèle ramené à 2,3 de haut, pieds à 0) : cou [hauteur, rayon],
+  // haut de la tête [hauteur, rayon, avancée], yeux [hauteur, avancée, écart].
+  const ANCRES = {
+    chat: { cou: [0.86, 0.6], tete: [2.02, 0.5, -0.04], yeux: [1.43, 0.66, 0.29] },
+    elephant: { cou: [0.84, 0.64], tete: [2.08, 0.5, -0.18], yeux: [1.5, 0.72, 0.36] },
+    perroquet: { cou: [0.98, 0.5], tete: [2.0, 0.42, -0.06], yeux: [1.52, 0.74, 0.3] },
+    tortue: { cou: [0.98, 0.52], tete: [2.08, 0.48, 0.0], yeux: [1.48, 0.7, 0.3] }
+  };
+  let portes = [];
+  const textureWax = (() => {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+    const g = c.getContext('2d');
+    g.fillStyle = '#F28C28'; g.fillRect(0, 0, 256, 128);
+    g.fillStyle = '#0E8F5B'; for (let x = 0; x < 256; x += 64) g.fillRect(x, 0, 22, 128);
+    g.fillStyle = '#FFF4E0';
+    for (let x = 32; x < 256; x += 64) for (let y = 16; y < 128; y += 32) { g.beginPath(); g.arc(x + 11, y, 8, 0, Math.PI * 2); g.fill(); }
+    g.fillStyle = '#7A2E0E'; for (let x = 32; x < 256; x += 64) for (let y = 16; y < 128; y += 32) { g.beginPath(); g.arc(x + 11, y, 3.5, 0, Math.PI * 2); g.fill(); }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 1);
+    return t;
+  })();
+  const matWax = new THREE.MeshStandardMaterial({ map: textureWax, roughness: 0.8 });
+  const matOr = new THREE.MeshStandardMaterial({ color: 0xF2B632, metalness: 0.6, roughness: 0.3, emissive: 0x3a2600 });
+  const matNoir = new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.25, metalness: 0.2 });
+
+  function creerAccessoire(id, a) {
+    const gr = new THREE.Group();
+    if (id === 'foulard') {
+      const [y, r] = a.cou;
+      const anneau = new THREE.Mesh(new THREE.TorusGeometry(r, 0.1, 14, 48), matWax);
+      anneau.rotation.x = Math.PI / 2; anneau.scale.set(1, 1, 0.8);
+      const noeud = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), matWax); noeud.position.set(0, -0.02, r + 0.05);
+      const pan1 = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.34, 4), matWax); pan1.position.set(-0.08, -0.2, r + 0.03); pan1.rotation.set(0.2, 0, 2.9);
+      const pan2 = pan1.clone(); pan2.position.x = 0.08; pan2.rotation.z = -2.9;
+      gr.add(anneau, noeud, pan1, pan2); gr.position.y = y;
+    } else if (id === 'chapeau') {
+      const [y, r, z] = a.tete;
+      const calotte = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.72, r * 0.86, 0.3, 32, 1, true), matWax);
+      const dessus = new THREE.Mesh(new THREE.CircleGeometry(r * 0.72, 32), matWax); dessus.rotation.x = -Math.PI / 2; dessus.position.y = 0.15;
+      const bord = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.25, r * 1.32, 0.04, 40), matWax); bord.position.y = -0.14;
+      gr.add(calotte, dessus, bord); gr.position.set(0, y + 0.06, z); gr.rotation.set(-0.12, 0, 0.1);
+    } else if (id === 'lunettes') {
+      const [y, z, e] = a.yeux;
+      for (const sx of [-1, 1]) {
+        const verre = new THREE.Mesh(new THREE.CircleGeometry(0.15, 28), matNoir); verre.position.set(sx * e, 0, 0);
+        const cercle = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.022, 8, 28), matOr); cercle.position.set(sx * e, 0, 0.005);
+        const branche = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.42), matNoir); branche.position.set(sx * (e + 0.16), 0.02, -0.2);
+        gr.add(verre, cercle, branche);
+      }
+      const pont = new THREE.Mesh(new THREE.BoxGeometry(e * 2 - 0.28, 0.03, 0.03), matOr); pont.position.y = 0.05;
+      gr.add(pont); gr.position.set(0, y, z + 0.04);
+    } else if (id === 'medaille') {
+      const [y, r] = a.cou;
+      const ruban1 = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.26, 0.02), new THREE.MeshStandardMaterial({ color: 0xF28C28 }));
+      ruban1.position.set(-0.05, -0.12, r + 0.08); ruban1.rotation.z = 0.25;
+      const ruban2 = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.26, 0.02), new THREE.MeshStandardMaterial({ color: 0x0E8F5B }));
+      ruban2.position.set(0.05, -0.12, r + 0.08); ruban2.rotation.z = -0.25;
+      const disque = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.035, 32), matOr);
+      disque.rotation.x = Math.PI / 2; disque.position.set(0, -0.3, r + 0.1);
+      const etoile = new THREE.Mesh(new THREE.CircleGeometry(0.06, 5), new THREE.MeshStandardMaterial({ color: 0xFFF4C8, emissive: 0x332200 }));
+      etoile.position.set(0, -0.3, r + 0.12);
+      gr.add(ruban1, ruban2, disque, etoile); gr.position.y = y;
+    } else if (id === 'couronne') {
+      const [y, r, z] = a.tete;
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.66, r * 0.6, 0.16, 32, 1, true), matOr);
+      base.material = matOr.clone(); base.material.side = THREE.DoubleSide;
+      gr.add(base);
+      for (let i = 0; i < 8; i++) {
+        const ang = (i / 8) * Math.PI * 2;
+        const pic = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.22, 8), matOr);
+        pic.position.set(Math.cos(ang) * r * 0.66, 0.18, Math.sin(ang) * r * 0.66);
+        const perle = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), new THREE.MeshStandardMaterial({ color: i % 2 ? 0xE4572E : 0x4FB7C0 }));
+        perle.position.set(Math.cos(ang) * r * 0.67, 0.0, Math.sin(ang) * r * 0.67);
+        gr.add(pic, perle);
+      }
+      gr.position.set(0, y + (portes.includes('chapeau') ? 0.34 : 0.17), z); gr.rotation.z = -0.08;
+    }
+    gr.name = `accessoire-${id}`;
+    return gr;
+  }
+  const groupeAccessoires = new THREE.Group();
+  function poserAccessoires() {
+    groupeAccessoires.clear();
+    const a = ANCRES[espece] || ANCRES.chat;
+    // Chapeau et couronne ensemble : la couronne passe sur le chapeau.
+    for (const id of portes) groupeAccessoires.add(creerAccessoire(id, a));
+    if (!corps.children.includes(groupeAccessoires)) corps.add(groupeAccessoires);
+  }
+
   const loader = new GLTFLoader();
   const cache = {};
   const racine = new THREE.Group();
@@ -133,6 +223,7 @@ export async function mountCompanion(container, especeInitiale) {
       const centre = box.getCenter(new THREE.Vector3());
       m.position.x -= centre.x; m.position.z -= centre.z; m.position.y -= box.min.y;
       corps.add(m);
+      poserAccessoires();
     } catch (err) {
       console.warn('Modèle introuvable', err);
     }
@@ -240,6 +331,7 @@ export async function mountCompanion(container, especeInitiale) {
   return {
     setMood(m) { if (m !== humeur) { humeur = m; debutHumeur = horloge.elapsedTime; } },
     setSpecies: chargerEspece,
-    impulsion() { elan = Math.min(1, elan + 0.8); }
+    impulsion() { elan = Math.min(1, elan + 0.8); },
+    setAccessoires(liste) { portes = Array.isArray(liste) ? [...liste] : []; poserAccessoires(); }
   };
 }

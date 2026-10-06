@@ -40,7 +40,7 @@ h1 { font-size: 26px; } h2 { font-size: 19px; }
 .brand-big { font-family: var(--display); font-weight: 700; font-size: 34px; letter-spacing: -1px; }
 .brand-big span, .brand span { color: var(--accent); }
 label { font-size: 12px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); }
-input[type=text], input[type=password], input[type=number], textarea {
+input[type=text], input[type=password], input[type=tel], input[type=number], textarea {
   width: 100%; min-height: 46px; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
 .btn { min-height: 48px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); padding: 0 18px; font-weight: 600; }
 .btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
@@ -365,3 +365,82 @@ select { width: 100%; min-height: 46px; padding: 10px 12px; border-radius: 12px;
 .choix-btn:disabled:not(.pris) { opacity: .45; }
 .choix-case { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); text-transform: none; letter-spacing: 0; font: 400 14px var(--body); color: var(--ink); }
 .choix-case input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+/* Comptes */
+.onglets-compte { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--surface-2, #EEE9DE); border-radius: 12px; padding: 4px; }
+.onglets-compte button { border: 0; background: transparent; border-radius: 9px; padding: 10px 6px; font: inherit; font-weight: 600; font-size: 14px; color: var(--muted); }
+.onglets-compte button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.form-compte { display: flex; flex-direction: column; gap: 8px; }
+.form-compte label { font-weight: 600; font-size: 14px; margin-top: 4px; }
+.form-compte .btn.primary { margin-top: 6px; }
+.form-compte p { margin: 0; }
+.quota { display: flex; flex-direction: column; gap: 6px; }
+.quota .barre { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.quota .barre i { display: block; height: 100%; background: var(--accent); border-radius: 99px; transition: width .3s; }
+.quota .barre.bas i { background: var(--warn, #C77700); }
+.compte-plus summary { cursor: pointer; font-size: 14px; color: var(--accent); padding: 4px 0; }
+.compte-plus[open] { display: flex; flex-direction: column; gap: 10px; }
+.liste-testeurs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.liste-testeurs li { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; }
+.liste-testeurs .actions-testeur select { flex: 1; }
+.liste-testeurs .actions-testeur { display: flex; gap: 6px; align-items: center; }
+.liste-testeurs select { font: inherit; font-size: 13px; padding: 6px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); }
+.pin-provisoire { grid-column: 1 / -1; background: var(--surface-2, #EEE9DE); border-radius: 10px; padding: 8px 10px; font-size: 14px; }
+
+/* Pharmacies de garde */
+.onglets-lieux { margin: 4px 0 2px; }
+.onglets-lieux button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.badge-garde { display: inline-block; align-self: flex-start; width: fit-content; font-size: 11px; font-weight: 700; letter-spacing: .02em; padding: 2px 7px; border-radius: 99px; background: #1F2A5C; color: #fff; vertical-align: 2px; }
+.pin-lieu.garde span { background: #1F2A5C; }
+.lieu-tete[disabled] { cursor: default; opacity: 1; color: inherit; }
+
+/* Le compagnon qui grandit */
+.niveau-btn { position: absolute; right: 12px; bottom: 12px; z-index: 2; display: flex; align-items: center; gap: 8px; border: 0; background: var(--surface); color: var(--ink); border-radius: 999px; padding: 4px 12px 4px 4px; font: inherit; box-shadow: 0 1px 4px rgb(0 0 0 / .08); }
+.niveau-anneau { position: relative; width: 36px; height: 36px; display: grid; place-items: center; }
+.niveau-anneau svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.niveau-anneau circle { fill: none; stroke-width: 4; }
+.niveau-anneau .fond { stroke: var(--line); }
+.niveau-anneau .plein { stroke: var(--accent); stroke-linecap: round; stroke-dasharray: 97.4; stroke-dashoffset: 97.4; transition: stroke-dashoffset .6s ease; }
+.niveau-anneau b { font: 700 14px var(--display); color: var(--accent); }
+.niveau-texte { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; }
+.niveau-texte #niveau-nom { font: 600 13px var(--display); }
+.niveau-texte .serie { font-size: 12px; color: var(--muted); }
+.app.compact .niveau-btn { padding: 3px; }
+.app.compact .niveau-texte { display: none; }
+.gains { position: absolute; right: 22px; bottom: 58px; z-index: 3; pointer-events: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.gain { background: var(--accent); color: var(--accent-ink); font: 700 13px var(--display); padding: 3px 10px; border-radius: 999px; animation: gain-monte 2.2s ease forwards; }
+@keyframes gain-monte { 0% { opacity: 0; transform: translateY(10px) scale(.9); } 15% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-24px); } }
+@media (prefers-reduced-motion: reduce) { .gain { animation-duration: 3s; animation-name: gain-fondu; } @keyframes gain-fondu { 0%, 80% { opacity: 1; } 100% { opacity: 0; } } }
+.prog-fete { background: var(--accent-soft); border-radius: 16px; padding: 14px; text-align: center; }
+.prog-fete strong { display: block; font: 700 18px var(--display); color: var(--accent); }
+.prog-resume { display: flex; flex-direction: column; gap: 8px; }
+.prog-niveau { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.prog-gros { font: 700 20px var(--display); }
+.barre-prog { height: 10px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.barre-prog i { display: block; height: 100%; background: var(--accent); border-radius: 99px; transition: width .6s ease; }
+.prog-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.prog-stats > div { background: var(--surface-2); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.prog-stats strong { font: 700 20px var(--display); }
+.prog-titre-section { font: 600 16px var(--display); margin: 14px 0 2px; }
+.prog-accessoires { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.accessoire { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; border-radius: 14px; border: 2px solid var(--line); background: var(--surface); font: inherit; font-size: 13px; text-align: center; color: var(--ink); }
+.accessoire .ico { font-size: 26px; }
+.accessoire[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.accessoire[disabled] { opacity: .55; }
+.accessoire .verrou { font-size: 11.5px; color: var(--muted); }
+.prog-gains { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.prog-gains li { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+
+/* Dictée enregistrée */
+.tool-btn.actif { animation: enregistre 1.2s ease-in-out infinite; }
+.tool-btn.attente { color: var(--accent); background: var(--accent-soft); animation: attente 1s linear infinite; }
+@keyframes enregistre { 50% { box-shadow: 0 0 0 6px var(--bad-soft); } }
+@keyframes attente { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tool-btn.actif, .tool-btn.attente { animation: none; } }
+
+/* WhatsApp et code oublié */
+.lien { background: none; border: 0; padding: 4px 0; color: var(--accent); font: inherit; font-size: 14px; text-align: left; text-decoration: underline; text-underline-offset: 3px; }
+.interrupteur { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.interrupteur input { width: 20px; height: 20px; accent-color: var(--accent); }
+.interrupteur, .interrupteur span { text-transform: none; letter-spacing: normal; font: 500 14px var(--body); color: var(--ink); }
+a.btn { text-decoration: none; }

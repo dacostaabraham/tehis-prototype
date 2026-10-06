@@ -2,6 +2,8 @@
 // Données OpenStreetMap (Overpass pour les lieux, Nominatim pour transformer un quartier en coordonnées).
 // Gratuit, sans clé ; respecter les règles d'usage : User-Agent identifiable, cache, peu de requêtes.
 
+import { gardesDeLaSemaine, gardesProches, SOURCE_GARDE } from './garde.js';
+
 // Serveurs remplaçables par variables d'environnement (instance privée, tests).
 const OVERPASS = (process.env.OVERPASS_URL || 'https://overpass-api.de/api/interpreter,https://overpass.kumi.systems/api/interpreter').split(',');
 const NOMINATIM = process.env.NOMINATIM_URL || 'https://nominatim.openstreetmap.org/search';
@@ -28,13 +30,14 @@ export const CATEGORIES = {
 
 export const SCHEMA_LIEUX = {
   name: 'chercher_lieux',
-  description: "Trouve des établissements proches de l'utilisateur (ou d'un quartier) et les affiche sur une carte avec la distance, le bouton « Y aller » (itinéraire) et « Appeler » si le numéro est connu. Utilise la position partagée par l'utilisateur ; sinon passe « pres_de » (quartier, commune ou ville). Si aucune position n'est connue, l'outil demande à l'utilisateur de la partager : n'invente jamais d'adresse. Les données viennent d'OpenStreetMap : elles ne disent pas si une pharmacie est de garde.",
+  description: "Trouve des établissements proches de l'utilisateur (ou d'un quartier) et les affiche sur une carte avec la distance, le bouton « Y aller » (itinéraire) et « Appeler » si le numéro est connu. Utilise la position partagée par l'utilisateur ; sinon passe « pres_de » (quartier, commune ou ville). Si aucune position n'est connue, l'outil demande à l'utilisateur de la partager : n'invente jamais d'adresse. Pour la catégorie « pharmacie », le résultat contient aussi les pharmacies DE GARDE de la semaine les plus proches (liste officielle publiée chaque semaine, avec téléphone) : mets « garde » à vrai si la personne cherche une pharmacie de garde, la nuit, le dimanche ou un jour férié.",
   input_schema: {
     type: 'object',
     properties: {
       categorie: { type: 'string', enum: Object.keys(CATEGORIES) },
       pres_de: { type: 'string', description: 'Quartier, commune ou ville, si l\'utilisateur l\'a donné (ex. « Cocody Angré », « Bouaké »). Laisser vide pour utiliser sa position.' },
-      rayon_km: { type: 'number', description: 'Rayon de recherche, 1 à 10 km (3 par défaut)' }
+      rayon_km: { type: 'number', description: 'Rayon de recherche, 1 à 10 km (3 par défaut)' },
+      garde: { type: 'boolean', description: 'Pharmacies : afficher d\'abord celles de garde cette semaine' }
     },
     required: ['categorie']
   }
@@ -116,6 +119,12 @@ export async function geocoder(texte, fetchImpl = fetch) {
  * Exécute l'outil. ctx = { position: {lat, lng} | null }.
  * Renvoie { type: 'lieux', ... } ou { type: 'besoin_position' } ou { erreur }.
  */
+/** Nuit (19 h – 8 h), samedi après-midi ou dimanche, heure d'Abidjan (UTC) : la garde passe en premier. */
+export function estHeureDeGarde(d = new Date()) {
+  const h = d.getUTCHours(), j = d.getUTCDay();
+  return h >= 19 || h < 8 || j === 0 || (j === 6 && h >= 13);
+}
+
 export async function chercherLieux(input = {}, ctx = {}, fetchImpl = fetch) {
   const cat = CATEGORIES[input.categorie];
   if (!cat) return { erreur: `Catégorie inconnue : ${input.categorie}` };
@@ -209,6 +218,19 @@ function erreurReseau(e) {
   }
 
   const lieux = versLieux(elements, centre);
+  // Pharmacies : on ajoute celles de garde cette semaine (source hebdomadaire, indépendante d'OpenStreetMap).
+  let garde = null;
+  if (input.categorie === 'pharmacie') {
+    const semaine = await (ctx.gardes || gardesDeLaSemaine)({ fetchImpl: ctx.fetchGardes || fetchImpl });
+    if (semaine) {
+      garde = { periode: semaine.periode?.texte || null, source: SOURCE_GARDE, pharmacies: gardesProches(semaine, centre) };
+      // Repère dans la liste OpenStreetMap celles qui sont de garde (même nom ou à moins de 120 m).
+      const simple = (n) => String(n).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/^pharmacie\s+(de\s+la\s+|des\s+|du\s+|de\s+l'|de\s+)?/, '').replace(/[^a-z0-9]/g, '');
+      for (const l of lieux) {
+        l.garde = garde.pharmacies.some((g) => simple(g.nom) === simple(l.nom) || (g.lat !== null && distanceMetres(g, l) < 120));
+      }
+    }
+  }
   return {
     type: 'lieux',
     categorie: input.categorie,
@@ -219,7 +241,11 @@ function erreurReseau(e) {
     rayonKm: rayon,
     lieux,
     total: lieux.length,
-    note: input.categorie === 'pharmacie' ? 'Les pharmacies de garde changent chaque semaine : appelle avant de te déplacer la nuit ou le dimanche.' : null,
+    garde,
+    gardeDAbord: Boolean(garde?.pharmacies.length) && (input.garde === true || estHeureDeGarde()),
+    note: input.categorie === 'pharmacie'
+      ? (garde ? `Liste de garde ${garde.periode ? `de la semaine ${garde.periode}` : 'de la semaine'} (source : abidjan.net). Appelle avant de te déplacer.` : "La liste des pharmacies de garde n'a pas pu être lue : appelle avant de te déplacer la nuit ou le dimanche.")
+      : null,
     source: 'OpenStreetMap'
   };
 }

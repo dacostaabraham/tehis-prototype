@@ -29,7 +29,7 @@ export async function reponseDemo(agent, message, { nomCompagnon, send, store, f
   const lieu = /pharmac/i.test(message) ? 'pharmacie' : /h[oô]pital/i.test(message) ? 'hopital' : /centre de sant|clinique|dispensaire/i.test(message) ? 'centre_sante' : /laborat/i.test(message) ? 'laboratoire' : null;
   if (lieu && ['sante', 'compagnon'].includes(agent)) {
     send('mood', { mood: 'cherche' });
-    const r = await chercherLieux({ categorie: lieu }, { position });
+    const r = await chercherLieux({ categorie: lieu, garde: /garde|nuit|dimanche/i.test(message) }, { position });
     const dire = async (t) => { for (const mot of t.split(/(\s+)/)) { send('token', { text: mot }); await pause(14); } };
     if (r.type === 'besoin_position') {
       await dire("Pour trouver ce qu'il y a autour de toi, partage ta position, ou écris ton quartier.");

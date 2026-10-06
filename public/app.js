@@ -4,15 +4,16 @@ import { cascadeRentabilite, pointMort, fixerPrix, projection12Mois, estimationB
 import { budgetMensuel, planEpargne, tontine, EXEMPLES_BUDGET } from './shared/budget.js';
 import { AGENTS, GROUPES, NOMS_OFFRES, accesAgent as accesCatalogue, estPerso } from './shared/agents.js';
 import { initPerso, ouvrirCreation, ouvrirEdition } from './perso.js';
-import { voixDisponible, parler, arreter, debloquer } from './voix.js';
+import { voixDisponible, parler, arreter, debloquer, configurerVoixIA, voixNaturelle } from './voix.js';
 import { markdown, echapper } from './shared/markdown.js';
 import { carteResultat, carteDocument, carteSuggestion, carteOffreDev, carteValidation, noteActivite, blocSources, blocListe, brancherListes, actionsDocument, dateFr } from './cards.js';
 import { toast } from './shared/ui.js';
+import { ACCESSOIRES, GAINS } from './shared/progression.js';
 import { carteLieux, cartePosition, carteChoix, barreProximite, obtenirPosition, positionConnue } from './lieux.js';
 import { vignetteAgent, etatVide, ICONES_SVG } from './shared/identite.js';
 
 const $ = (s) => document.querySelector(s);
-const etat = { agent: 'compagnon', profil: {}, statut: {}, compagnon: null, envoi: false, photo: null, persos: { agents: [], limites: { agents: 1 }, offre: 'gratuit' } };
+const etat = { uid: null, quota: null, progression: null, agent: 'compagnon', profil: {}, statut: {}, compagnon: null, envoi: false, photo: null, persos: { agents: [], limites: { agents: 1 }, offre: 'gratuit' } };
 
 /* Agents de Tehis et agents créés par l'utilisateur (« perso:<id> »). */
 const fichePerso = (id) => etat.persos.agents.find((a) => `perso:${a.id}` === id);
@@ -41,7 +42,7 @@ async function api(path, options = {}) {
   } catch (e) {
     throw new Error('Pas de connexion : vérifie ton réseau puis réessaie.');
   }
-  if (r.status === 401 && path !== '/api/login') { montrer('bienvenue'); throw new Error('Connexion requise'); }
+  if (r.status === 401 && !['/api/connexion', '/api/inscription', '/api/compte/pin', '/api/compte'].includes(path)) { afficherBienvenue('connexion'); throw new Error('Connexion requise'); }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.erreur || `Erreur ${r.status}`);
   return data;
@@ -51,26 +52,59 @@ function montrer(vue) {
   for (const v of ['bienvenue', 'setup', 'app']) $(`#view-${v}`).hidden = v !== vue;
 }
 
-/* ---------- Bienvenue ---------- */
-function afficherBienvenue() {
-  const beta = etat.statut.motDePasseRequis && !etat.statut.authentifie;
-  $('#bienvenue-go').hidden = beta;
-  $('#login-form').hidden = !beta;
+/* ---------- Bienvenue : inscription et connexion ---------- */
+function ongletCompte(quel) {
+  const ins = quel !== 'connexion';
+  $('#tab-inscription').setAttribute('aria-selected', String(ins));
+  $('#tab-connexion').setAttribute('aria-selected', String(!ins));
+  $('#form-inscription').hidden = !ins;
+  $('#form-connexion').hidden = ins;
+}
+function afficherBienvenue(onglet) {
+  $('#ins-invitation-zone').hidden = !etat.statut.invitationRequise;
+  $('#oubli-btn').hidden = !etat.statut.whatsapp;
+  $('#oubli-texte').hidden = Boolean(etat.statut.whatsapp);
+  $('#form-oubli').hidden = true;
+  ongletCompte(onglet || (lsGet('tehis_a_un_compte', false) ? 'connexion' : 'inscription'));
   montrer('bienvenue');
 }
-$('#bienvenue-go').addEventListener('click', async () => {
-  lsSet('tehis_bienvenue', true);
-  await demarrer();
+$('#tab-inscription').addEventListener('click', () => ongletCompte('inscription'));
+/* Code secret oublié : un code arrive sur WhatsApp. */
+$('#oubli-btn').addEventListener('click', () => {
+  $('#form-connexion').hidden = true; $('#form-oubli').hidden = false;
+  $('#oubli-tel').value = $('#cnx-tel').value; $('#oubli-suite').hidden = true; $('#oubli-erreur').hidden = true;
 });
-$('#login-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const err = $('#login-error'); err.hidden = true;
+$('#oubli-retour').addEventListener('click', () => { $('#form-oubli').hidden = true; ongletCompte('connexion'); });
+$('#oubli-envoyer').addEventListener('click', async (e) => {
+  const err = $('#oubli-erreur'); err.hidden = true; e.target.disabled = true;
   try {
-    await api('/api/login', { method: 'POST', body: JSON.stringify({ password: $('#password').value }) });
-    lsSet('tehis_bienvenue', true);
-    await demarrer();
-  } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+    await api('/api/code-oublie', { method: 'POST', body: JSON.stringify({ telephone: $('#oubli-tel').value }) });
+    $('#oubli-suite').hidden = false; e.target.textContent = 'Renvoyer le code'; $('#oubli-code').focus();
+  } catch (ex) { err.textContent = ex.message; err.hidden = false; } finally { e.target.disabled = false; }
 });
+$('#form-oubli').addEventListener('submit', (e) => soumettreCompte(e, '/api/code-oublie/valider', {
+  telephone: $('#oubli-tel').value, code: $('#oubli-code').value, nouveau: $('#oubli-pin').value
+}, '#oubli-erreur'));
+$('#tab-connexion').addEventListener('click', () => ongletCompte('connexion'));
+
+async function soumettreCompte(e, chemin, corps, zoneErreur) {
+  e.preventDefault();
+  const err = $(zoneErreur); err.hidden = true;
+  const bouton = e.target.querySelector('button[type=submit]');
+  bouton.disabled = true;
+  try {
+    await api(chemin, { method: 'POST', body: JSON.stringify(corps) });
+    lsSet('tehis_a_un_compte', true);
+    e.target.reset();
+    await demarrer();
+  } catch (ex) { err.textContent = ex.message; err.hidden = false; } finally { bouton.disabled = false; }
+}
+$('#form-inscription').addEventListener('submit', (e) => soumettreCompte(e, '/api/inscription', {
+  prenom: $('#ins-prenom').value, telephone: $('#ins-tel').value, pin: $('#ins-pin').value, invitation: $('#ins-invitation').value
+}, '#ins-erreur'));
+$('#form-connexion').addEventListener('submit', (e) => soumettreCompte(e, '/api/connexion', {
+  telephone: $('#cnx-tel').value, pin: $('#cnx-pin').value
+}, '#cnx-erreur'));
 
 /* ---------- Choix du compagnon ---------- */
 let especeChoisie = 'chat';
@@ -116,7 +150,9 @@ async function ouvrirApp() {
   } else {
     await etat.compagnon.setSpecies(etat.profil.espece || 'chat');
   }
+  if (etat.progression) etat.compagnon.setAccessoires?.(etat.progression.portes);
   await chargerPersos();
+  api('/api/progression/visite', { method: 'POST' }).then((p) => majProgression(p)).catch(() => {});
   const memorise = lsGet('tehis_agent', 'compagnon');
   choisirAgent(accesAgent(memorise, etat.profil).ok ? memorise : 'compagnon');
   const panneau = new URLSearchParams(location.search).get('panneau');
@@ -200,6 +236,7 @@ function choisirAgent(agent) {
   $('#agent-header-resume').textContent = a.resume || '';
   $('#input').placeholder = agent === 'compagnon' ? `Écris à ${etat.profil.nomCompagnon || 'ton compagnon'}…` : 'Ton message…';
   afficherHistorique();
+  synchroniser(agent);
 }
 
 /* ---------- Panneaux ---------- */
@@ -284,14 +321,53 @@ function afficherPanneauAgents() {
 }
 
 /* ---------- Chat ---------- */
-const cleHisto = (agent = etat.agent) => `tehis_chat_${agent}`;
+const cleHisto = (agent = etat.agent) => `tehis_chat_${etat.uid}_${agent}`;
+const cleMaj = (agent) => `tehis_maj_${etat.uid}_${agent}`;
+/* Conversations : affichées tout de suite depuis le téléphone, enregistrées sur le serveur
+   (retrouvées sur un autre appareil ou après avoir vidé le navigateur). */
+const envoisEnAttente = {};
+function sauverHisto(agent, items) {
+  const its = items.slice(-80);
+  lsSet(cleHisto(agent), its);
+  clearTimeout(envoisEnAttente[agent]);
+  envoisEnAttente[agent] = setTimeout(async () => {
+    try {
+      const r = await api(`/api/conversations/${encodeURIComponent(agent)}`, { method: 'PUT', body: JSON.stringify({ items: its }) });
+      lsSet(cleMaj(agent), r.updated_at);
+    } catch { /* hors ligne : renvoyé au prochain message */ }
+    delete envoisEnAttente[agent];
+  }, 800);
+}
+async function synchroniser(agent) {
+  try {
+    const r = await api(`/api/conversations/${encodeURIComponent(agent)}`);
+    if (envoisEnAttente[agent] || etat.envoi) return;
+    const locaux = lsGet(cleHisto(agent), []);
+    if (!r.updated_at) { if (locaux.length) sauverHisto(agent, locaux); return; }
+    if (r.updated_at === lsGet(cleMaj(agent), null)) return;
+    lsSet(cleHisto(agent), r.items); lsSet(cleMaj(agent), r.updated_at);
+    if (etat.agent === agent) afficherHistorique();
+  } catch { /* hors ligne : on garde la version du téléphone */ }
+}
+/* Discussions d'avant les comptes, restées sur ce téléphone : reprises par le premier compte connecté ici. */
+function reprendreAnciennesDiscussions() {
+  try {
+    for (const k of Object.keys(localStorage)) {
+      const m = /^tehis_chat_((?:perso:[0-9a-f-]{36})|[a-z]+)$/.exec(k);
+      if (!m) continue;
+      if (!localStorage.getItem(cleHisto(m[1]))) localStorage.setItem(cleHisto(m[1]), localStorage.getItem(k));
+      localStorage.removeItem(k);
+    }
+  } catch { /* stockage indisponible */ }
+}
 /* ---------- Lieux à proximité ---------- */
 // Recherche directe (boutons « Autour de moi ») : sans IA, gratuite, marche aussi en mode démo.
 async function chercherDirect(demande, quartier = '') {
   debloquer();
   const cle = cleHisto();
   const items = lsGet(cle, []);
-  const ajouterItem = (it) => { items.push(it); lsSet(cle, items.slice(-80)); rendreItem(it, items); $('#messages').scrollTop = $('#messages').scrollHeight; };
+  const agentCourant = etat.agent;
+  const ajouterItem = (it) => { items.push(it); sauverHisto(agentCourant, items); rendreItem(it, items); $('#messages').scrollTop = $('#messages').scrollHeight; };
   let pos = null;
   if (!quartier) {
     try { pos = await obtenirPosition(); } catch (e) {
@@ -303,11 +379,13 @@ async function chercherDirect(demande, quartier = '') {
   const n = noteActivite(`Recherche : ${demande.libelle.toLowerCase()}${quartier ? ` près de ${quartier}` : ' autour de toi'}…`);
   $('#messages').appendChild(n);
   try {
-    const qs = new URLSearchParams({ categorie: demande.categorie, ...(quartier ? { pres_de: quartier } : { lat: pos.lat, lng: pos.lng }) });
+    const qs = new URLSearchParams({ categorie: demande.categorie, ...(demande.garde ? { garde: '1' } : {}), ...(quartier ? { pres_de: quartier } : { lat: pos.lat, lng: pos.lng }) });
     const r = await api(`/api/lieux?${qs}`);
     n.remove();
-    ajouterItem({ type: 'tool', result: r });
+    const { progression, ...resultat } = r;
+    ajouterItem({ type: 'tool', result: resultat });
     humeur('fete');
+    if (progression) majProgression(progression);
   } catch (e) {
     n.remove(); humeur('repos');
     toast(e.message, 5000);
@@ -329,11 +407,11 @@ function rendreItem(it, items) {
   if (it.type === 'tool' && it.result?.type === 'lieux') zone.appendChild(carteLieux(it.result));
   else if (it.type === 'tool') zone.appendChild(carteResultat(it.result, ctxCartes));
   else if (it.type === 'position') zone.appendChild(cartePosition(it.data, ctxPosition));
-  else if (it.type === 'choix') zone.appendChild(carteChoix(it, { envoyer: (t) => envoyer(t), ecrire: () => $('#input').focus(), sauver: () => lsSet(cleHisto(), items) }));
+  else if (it.type === 'choix') zone.appendChild(carteChoix(it, { envoyer: (t) => envoyer(t), ecrire: () => $('#input').focus(), sauver: () => sauverHisto(etat.agent, items) }));
   else if (it.type === 'document') zone.appendChild(carteDocument(it.doc));
   else if (it.type === 'suggestion') zone.appendChild(carteSuggestion(it.data, ctxCartes));
   else if (it.type === 'devoffer') zone.appendChild(carteOffreDev(ctxCartes));
-  else if (it.type === 'approval') zone.appendChild(carteValidation(it, { ...ctxCartes, sauver: () => lsSet(cleHisto('dev'), items), apresDecision: suiteValidation }));
+  else if (it.type === 'approval') zone.appendChild(carteValidation(it, { ...ctxCartes, sauver: () => sauverHisto('dev', items), apresDecision: suiteValidation }));
   else if (it.type === 'activite') zone.appendChild(noteActivite(it.texte));
   else if (it.type === 'sources') zone.appendChild(blocSources(it.sources));
   else if (it.type === 'memory') { const n = noteActivite(`Retenu : ${it.fait}`); zone.appendChild(n); }
@@ -380,7 +458,7 @@ function afficherHistorique() {
     const suivant = brut.slice(i + 1).find((x) => x.role);
     return !(suivant?.role === 'user' && suivant.content === it.content);
   });
-  if (items.length !== brut.length) lsSet(cleHisto(), items);
+  if (items.length !== brut.length) sauverHisto(etat.agent, items);
   const a = metaAgent(etat.agent);
   if (!items.length) {
     ajouterBulle('bot', etat.agent === 'compagnon'
@@ -391,7 +469,7 @@ function afficherHistorique() {
   for (const it of items) rendreItem(it, items);
   $('#proximite')?.remove();
   if (a.actions?.length) {
-    const barre = barreProximite(a.actions, { chercher: (act) => chercherDirect({ categorie: act.categorie, libelle: act.libelle }) });
+    const barre = barreProximite(a.actions, { chercher: (act) => chercherDirect({ categorie: act.categorie, libelle: act.garde ? 'Pharmacies de garde' : act.libelle, garde: Boolean(act.garde) }) });
     barre.id = 'proximite';
     $('#suggestions').before(barre);
   }
@@ -491,26 +569,62 @@ function reduireImage(fichier, max = 1280) {
   });
 }
 
-/* Dictée vocale (navigateur) : Chrome Android et Safari récents. */
+/* Dictée : enregistrement transcrit par le serveur (voix naturelle activée), sinon dictée du navigateur. */
 const Reconnaissance = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (Reconnaissance) {
-  const micro = $('#btn-micro');
+const micro = $('#btn-micro');
+let dicteeInitialisee = false;
+function initDictee() {
+  if (dicteeInitialisee) return;
+  dicteeInitialisee = true;
+  const enregistrement = etat.statut.voixIA && window.MediaRecorder && navigator.mediaDevices?.getUserMedia;
+  if (!enregistrement && !Reconnaissance) return;
   micro.hidden = false;
   let rec = null;
-  micro.addEventListener('click', () => {
+  const remettre = () => { micro.classList.remove('actif', 'attente'); micro.setAttribute('aria-label', 'Dicter un message'); };
+  const avertir = (texte) => { const ph = input.placeholder; input.placeholder = texte; setTimeout(() => { input.placeholder = ph; }, 4000); };
+
+  micro.addEventListener('click', async () => {
+    debloquer();
     if (rec) { rec.stop(); return; }
+    if (enregistrement) {
+      let flux;
+      try { flux = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { avertir('Micro refusé : autorise-le dans les réglages du téléphone'); return; }
+      const type = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm'].find((t) => MediaRecorder.isTypeSupported?.(t)) || '';
+      const morceaux = [];
+      rec = new MediaRecorder(flux, type ? { mimeType: type } : undefined);
+      const limite = setTimeout(() => rec?.state === 'recording' && rec.stop(), 120_000);
+      rec.ondataavailable = (e) => { if (e.data.size) morceaux.push(e.data); };
+      rec.onstop = async () => {
+        clearTimeout(limite);
+        flux.getTracks().forEach((t) => t.stop());
+        rec = null;
+        micro.classList.remove('actif'); micro.classList.add('attente');
+        micro.setAttribute('aria-label', 'Transcription en cours');
+        humeur('ecoute');
+        try {
+          const blob = new Blob(morceaux, { type: (morceaux[0]?.type || type || 'audio/webm').split(';')[0] });
+          if (blob.size < 1500) throw new Error('Je n\'ai rien entendu. Maintiens le micro et parle.');
+          const r = await fetch('/api/voix/transcrire', { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob, credentials: 'same-origin' });
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(d.erreur || 'Transcription impossible.');
+          if (d.texte) { input.value = `${input.value.trim() ? `${input.value.trim()} ` : ''}${d.texte}`; input.dispatchEvent(new Event('input')); input.focus(); }
+        } catch (e) { toast(e.message, 4500); }
+        humeur('repos');
+        remettre();
+      };
+      rec.start();
+      micro.classList.add('actif'); micro.setAttribute('aria-label', 'Arrêter et transcrire');
+      humeur('ecoute');
+      return;
+    }
     rec = new Reconnaissance();
     rec.lang = 'fr-FR'; rec.interimResults = true; rec.continuous = false;
     const base = input.value ? `${input.value.trim()} ` : '';
     rec.onresult = (ev) => { input.value = base + [...ev.results].map((r) => r[0].transcript).join(''); input.dispatchEvent(new Event('input')); };
-    rec.onend = () => { rec = null; micro.classList.remove('actif'); micro.setAttribute('aria-label', 'Dicter un message'); };
+    rec.onend = () => { rec = null; remettre(); };
     rec.onerror = (ev) => {
       rec?.stop();
-      if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
-        const ph = input.placeholder;
-        input.placeholder = 'Micro refusé : autorise-le dans le navigateur pour dicter';
-        setTimeout(() => { input.placeholder = ph; }, 4000);
-      }
+      if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') avertir('Micro refusé : autorise-le dans le navigateur pour dicter');
     };
     micro.classList.add('actif'); micro.setAttribute('aria-label', 'Arrêter la dictée');
     rec.start();
@@ -532,6 +646,7 @@ async function envoyer(texte, { auto = false, agent = etat.agent } = {}) {
   retirerPhoto();
   items.push({ role: 'user', content: texte, ...(photo ? { photo: true } : {}), ...(auto ? { auto: true } : {}) });
   lsSet(cle, items);
+  clearTimeout(envoisEnAttente[agent]); envoisEnAttente[agent] = 'envoi';
   const indexUser = items.length - 1;
   const visible = agent === etat.agent;
   const zone = $('#messages');
@@ -589,6 +704,8 @@ async function envoyer(texte, { auto = false, agent = etat.agent } = {}) {
           if (evt === 'position') ajouter({ type: 'position', data });
           nouvelleBulle();
         } else if (evt === 'error') erreur = data.message;
+        else if (evt === 'done' && data.quota) majQuota(data.quota, true);
+        else if (evt === 'progression') majProgression(data);
         zone.scrollTop = zone.scrollHeight;
       }
     }
@@ -600,8 +717,9 @@ async function envoyer(texte, { auto = false, agent = etat.agent } = {}) {
       const cartes = items.slice(items.lastIndexOf(items.filter((i) => i.role).at(-1)) + 1).map((i) => i.type).filter(Boolean);
       items.push({ role: 'assistant', content: cartes.length ? `(J'ai affiché : ${cartes.join(', ')})` : '…', masque: true });
     }
-    // L'historique garde au plus 80 éléments par agent sur le téléphone.
-    lsSet(cle, items.slice(-80));
+    // L'historique garde au plus 80 éléments par agent.
+    delete envoisEnAttente[agent];
+    sauverHisto(agent, items);
     if (lectureAuto && visible && aLire.trim() && !auto) {
       const derniere = [...zone.querySelectorAll('.msg.bot .ecouter')].at(-1);
       lire(aLire, derniere);
@@ -611,6 +729,7 @@ async function envoyer(texte, { auto = false, agent = etat.agent } = {}) {
     // Rien n'a été répondu : le message n'est pas gardé, on propose de le renvoyer.
     bulle.remove();
     if (items.length === indexUser + 1) { items.splice(indexUser, 1); lsSet(cle, items); bulleUser?.remove(); }
+    if (envoisEnAttente[agent] === 'envoi') delete envoisEnAttente[agent];
     afficherErreur(ex.message, auto ? null : () => { input.value = texte; $('#composer').requestSubmit(); });
     humeur('repos');
   } finally {
@@ -734,7 +853,7 @@ function afficherCalcul(id) {
     const val = Array.isArray(v) ? v.join(' ') : (v ?? '');
     return `<div class="field${opt === 'texte' ? ' full' : ''}"><label for="c-${cle}">${echapper(lib)}</label><input id="c-${cle}" name="${cle}" type="${opt === 'texte' ? 'text' : 'number'}" inputmode="decimal" value="${echapper(String(val))}"></div>`;
   }).join('') + `<div class="calc-actions"><button class="btn accent" type="submit">Calculer</button><button class="btn small" type="button" id="calc-exemple">Exemple</button><button class="btn small" type="button" id="calc-agent">Demander conseil</button></div>`;
-  form.onsubmit = (e) => { e.preventDefault(); calculer(); };
+  form.onsubmit = (e) => { e.preventDefault(); calculer(); api('/api/progression/calcul', { method: 'POST' }).then(majProgression).catch(() => {}); };
   $('#calc-exemple').onclick = () => { delete valeursCalc[id]; lsSet('tehis_calc', valeursCalc); afficherCalcul(id); };
   $('#calc-agent').onclick = () => {
     const p = lireForm();
@@ -765,6 +884,78 @@ function calculer() {
   zone.innerHTML = '';
   try { zone.appendChild(carteResultat(def.fn(def.versParams ? def.versParams(p) : p), ctxCartes)); } catch (e) { zone.appendChild(carteResultat({ erreur: e.message })); }
 }
+
+/* ---------- Le compagnon qui grandit ---------- */
+const nomCompagnon = () => etat.profil.nomCompagnon || 'Kiki';
+function majProgression(p) {
+  if (!p || p.niveau === undefined) return;
+  const avant = etat.progression;
+  etat.progression = p;
+  const b = $('#niveau-btn');
+  b.hidden = false;
+  $('#niveau-num').textContent = p.niveau;
+  $('#niveau-nom').textContent = p.nom;
+  $('#niveau-serie').textContent = p.serie > 1 ? `🔥 ${p.serie} jours` : `${p.points} pts`;
+  $('#niveau-arc').style.strokeDashoffset = String(97.4 * (1 - Math.max(0.02, p.avance)));
+  b.setAttribute('aria-label', `${nomCompagnon()} : niveau ${p.niveau}, ${p.nom}, ${p.points} points${p.serie > 1 ? `, ${p.serie} jours de suite` : ''}. Voir sa progression.`);
+  if (!avant || String(avant.portes) !== String(p.portes)) etat.compagnon?.setAccessoires?.(p.portes);
+  // Petits « +5 » au-dessus du compagnon.
+  const zone = $('#gains');
+  (p.gains || []).filter((g) => g.points > 0).slice(0, 3).forEach((g, i) => setTimeout(() => {
+    const el = document.createElement('span');
+    el.className = 'gain'; el.textContent = `+${g.points} ${g.type === 'serie' ? `🔥 ${g.texte}` : ''}`.trim();
+    zone.appendChild(el); setTimeout(() => el.remove(), 2400);
+  }, i * 450));
+  if (p.niveauGagne) {
+    humeur('fete');
+    const nouveaux = (p.nouveaux || []).map((id) => `${ACCESSOIRES[id].icone} ${ACCESSOIRES[id].nom}`);
+    $('#prog-fete').innerHTML = `<strong>Niveau ${p.niveau} : ${echapper(p.nom)} !</strong><span>${echapper(nomCompagnon())} grandit avec toi.${nouveaux.length ? ` Nouveau : ${echapper(nouveaux.join(', '))}, déjà porté.` : ''}</span>`;
+    $('#prog-fete').hidden = false;
+    setTimeout(() => ouvrirProgression(true), 2600);
+  }
+  if ($('#dlg-progression').open) remplirProgression();
+}
+function remplirProgression() {
+  const p = etat.progression;
+  if (!p) return;
+  $('#prog-titre').textContent = `${nomCompagnon()} grandit avec toi`;
+  $('#prog-niveau').textContent = `Niveau ${p.niveau} · ${p.nom}`;
+  $('#prog-points').textContent = `${p.points} points`;
+  $('#prog-barre i').style.width = `${Math.round(p.avance * 100)}%`;
+  $('#prog-barre').setAttribute('aria-valuenow', String(Math.round(p.avance * 100)));
+  $('#prog-suivant').textContent = p.suivant ? `Encore ${p.suivant.points - p.points} points pour le niveau ${p.suivant.niveau} (${p.suivant.nom}).` : 'Niveau maximum atteint. Bravo !';
+  $('#prog-serie').textContent = p.serie;
+  $('#prog-serie').nextElementSibling.textContent = `${p.serie > 1 ? 'jours' : 'jour'} de suite 🔥`;
+  $('#prog-record').textContent = p.meilleureSerie;
+  $('#prog-agents').textContent = p.agents;
+  const zone = $('#prog-accessoires');
+  zone.innerHTML = '';
+  for (const [id, a] of Object.entries(ACCESSOIRES)) {
+    const ok = p.debloques.includes(id);
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'accessoire'; b.disabled = !ok;
+    b.setAttribute('aria-pressed', String(p.portes.includes(id)));
+    b.innerHTML = `<span class="ico" aria-hidden="true">${a.icone}</span><span>${echapper(a.nom)}</span>${ok ? '' : `<span class="verrou">🔒 Niveau ${a.niveau}</span>`}`;
+    b.onclick = async () => {
+      const portes = p.portes.includes(id) ? p.portes.filter((x) => x !== id) : [...p.portes, id];
+      try { majProgression(await api('/api/progression/portes', { method: 'PUT', body: JSON.stringify({ portes }) })); } catch (e) { toast(e.message); }
+    };
+    zone.appendChild(b);
+  }
+  $('#prog-regles').innerHTML = [
+    ['Écrire à un agent', `+${GAINS.message.points}`], ['Essayer un nouvel agent', `+${GAINS.nouvel_agent.points}`],
+    ['Créer un document', `+${GAINS.document.points}`], ['Programmer un rappel', `+${GAINS.rappel.points}`],
+    ['Chercher autour de toi', `+${GAINS.lieux.points}`], ['Faire un calcul', `+${GAINS.calcul.points}`],
+    ['Revenir chaque jour', `+${GAINS.jour.points}`], ['3, 7, 14 ou 30 jours de suite', 'bonus']
+  ].map(([t, pts]) => `<li><span>${t}</span><strong>${pts}</strong></li>`).join('');
+}
+function ouvrirProgression(fete = false) {
+  if (!fete) $('#prog-fete').hidden = true;
+  remplirProgression();
+  if (!$('#dlg-progression').open) $('#dlg-progression').showModal();
+}
+$('#niveau-btn').addEventListener('click', () => ouvrirProgression());
+$('#dlg-progression').addEventListener('close', () => { $('#prog-fete').hidden = true; });
 
 /* ---------- Mes affaires ---------- */
 async function afficherAffaires() {
@@ -815,9 +1006,22 @@ async function ouvrirDocument(id) {
 
 /* ---------- Réglages ---------- */
 async function afficherReglages() {
+  $('#reg-voix').textContent = voixNaturelle() ? `Voix naturelle : chaque animal a la sienne. Si elle n'est pas disponible, la voix du téléphone prend le relais.` : 'Lit les réponses à voix haute avec la voix française du téléphone.';
   const esp = ESPECES.find((e) => e.id === etat.profil.espece)?.nom || 'Chat';
   $('#reg-compagnon').textContent = `${etat.profil.nomCompagnon || 'Kiki'}, ${esp.toLowerCase()}`;
-  $('#reg-offre').textContent = `${NOMS_OFFRES[etat.profil.offre] || 'Gratuit'} (prototype : offre fixée sur le serveur)`;
+  $('#reg-offre').textContent = `${NOMS_OFFRES[etat.profil.offre] || 'Gratuit'}${etat.profil.role === 'admin' ? ' · administrateur' : ''}`;
+  api('/api/compte').then((c) => { $('#reg-tel').textContent = c.telephone; majQuota(c.quota); }).catch(() => {});
+  const wa = etat.statut.whatsapp;
+  $('#reg-whatsapp').hidden = !wa;
+  if (wa) {
+    const chiffres = String(wa.numero || '').replace(/\D/g, '');
+    $('#reg-wa-lien').hidden = !chiffres;
+    $('#reg-wa-lien').href = `https://wa.me/${chiffres}?text=${encodeURIComponent('Bonjour Tehis !')}`;
+    $('#reg-wa-texte').textContent = `Écris à ${etat.profil.nomCompagnon || 'ton compagnon'} sur WhatsApp${wa.numero ? ` (${wa.numero})` : ''} depuis le numéro de ton compte : texte, vocaux, photos, position.`;
+    $('#reg-wa-rappels').checked = Boolean(etat.profil.rappelsWhatsApp);
+  }
+  $('#reg-admin').hidden = etat.profil.role !== 'admin';
+  if (etat.profil.role === 'admin') afficherTesteurs();
   const s = etat.statut;
   $('#reg-version').textContent = s.modeDemo ? 'Mode démo : aucune clé API configurée.' : `Modèles : ${s.modeles?.fort} et ${s.modeles?.leger}.`;
   majNotif();
@@ -830,9 +1034,15 @@ async function afficherReglages() {
   } else $('#reg-dev-etat').textContent = "Pour les développeurs : écrire du code, l'envoyer sur GitHub et déployer sur Render.";
 }
 $('#reg-changer').addEventListener('click', afficherSetup);
+$('#reg-wa-rappels').addEventListener('change', async (e) => {
+  try {
+    etat.profil = { ...etat.profil, ...(await api('/api/profile', { method: 'PUT', body: JSON.stringify({ rappelsWhatsApp: e.target.checked }) })) };
+    toast(e.target.checked ? 'Tes rappels arriveront aussi sur WhatsApp.' : 'Rappels WhatsApp désactivés.');
+  } catch (ex) { e.target.checked = !e.target.checked; toast(ex.message); }
+});
 $('#reg-voix-test').addEventListener('click', () => {
   if (!voixDisponible) { $('#reg-voix').textContent = "Ce navigateur ne sait pas lire à voix haute."; return; }
-  $('#reg-voix').textContent = "Si tu n'entends rien sur iPhone, vérifie le volume et que le bouton silencieux n'est pas activé.";
+  $('#reg-voix').textContent = `${voixNaturelle() ? 'Voix naturelle. ' : ''}Si tu n'entends rien sur iPhone, vérifie le volume et que le bouton silencieux n'est pas activé.`;
   lire(`Salut ${etat.profil.prenom || ''} ! Moi c'est ${etat.profil.nomCompagnon || 'Kiki'}. Voilà ma voix.`);
 });
 $('#reg-dev-btn').addEventListener('click', async () => {
@@ -861,11 +1071,91 @@ $('#dev-cles-effacer').addEventListener('click', async () => {
   $('#dev-cles-msg').textContent = 'Clés effacées.';
   afficherReglages();
 });
-$('#reg-effacer').addEventListener('click', () => {
-  if (!confirm('Effacer toutes les discussions enregistrées sur ce téléphone ?')) return;
-  [...Object.keys(AGENTS), ...etat.persos.agents.map((f) => `perso:${f.id}`)].forEach((a) => { try { localStorage.removeItem(cleHisto(a)); } catch { /* rien */ } });
+$('#reg-effacer').addEventListener('click', async () => {
+  if (!confirm('Effacer toutes tes discussions, sur tous tes appareils ?')) return;
+  try { await api('/api/conversations', { method: 'DELETE' }); } catch (e) { toast(e.message); return; }
+  oublierDiscussionsLocales();
   afficherHistorique();
+  toast('Discussions effacées.');
 });
+
+/* ---------- Mon compte ---------- */
+function oublierDiscussionsLocales() {
+  try { for (const k of Object.keys(localStorage)) if (k.startsWith(`tehis_chat_${etat.uid}_`) || k.startsWith(`tehis_maj_${etat.uid}_`)) localStorage.removeItem(k); } catch { /* rien */ }
+}
+function majQuota(q, apresMessage = false) {
+  if (!q?.messages) return;
+  etat.quota = q;
+  const m = q.messages;
+  const zone = $('#reg-quota');
+  if (m.max === null) zone.innerHTML = `<span class="small muted">Aujourd'hui : ${m.utilises} message${m.utilises > 1 ? 's' : ''} · sans limite</span>`;
+  else {
+    const pct = Math.min(100, Math.round((m.utilises / m.max) * 100));
+    zone.innerHTML = `<span class="small">Aujourd'hui : <strong>${m.utilises} / ${m.max}</strong> messages${q.recherches?.max ? ` · recherches web : ${q.recherches.utilises} / ${q.recherches.max}` : ''}</span><div class="barre${m.restants <= 3 ? ' bas' : ''}" role="progressbar" aria-valuemin="0" aria-valuemax="${m.max}" aria-valuenow="${m.utilises}"><i style="width:${pct}%"></i></div><span class="small muted">Le compteur repart à zéro chaque jour à minuit.</span>`;
+  }
+  if (apresMessage && m.restants !== null && m.restants <= 3) toast(m.restants ? `Il te reste ${m.restants} message${m.restants > 1 ? 's' : ''} aujourd'hui.` : "C'était ton dernier message du jour. Les calculs et « Autour de moi » restent disponibles.", 5000);
+}
+$('#reg-deconnexion').addEventListener('click', async () => {
+  if (!confirm('Te déconnecter de ce téléphone ?')) return;
+  await api('/api/deconnexion', { method: 'POST' }).catch(() => {});
+  oublierDiscussionsLocales();
+  etat.uid = null; etat.profil = {};
+  afficherBienvenue('connexion');
+});
+$('#form-pin').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = $('#pin-msg');
+  try {
+    await api('/api/compte/pin', { method: 'PUT', body: JSON.stringify({ ancien: $('#pin-ancien').value, nouveau: $('#pin-nouveau').value }) });
+    e.target.reset();
+    msg.textContent = 'Code changé. Tes autres appareils devront se reconnecter.';
+  } catch (ex) { msg.textContent = ex.message; }
+});
+$('#reg-supprimer').addEventListener('click', async () => {
+  const pin = prompt('Pour supprimer définitivement ton compte et toutes tes données, entre ton code secret :');
+  if (!pin) return;
+  try {
+    await api('/api/compte', { method: 'DELETE', body: JSON.stringify({ pin }) });
+    oublierDiscussionsLocales();
+    try { localStorage.removeItem('tehis_a_un_compte'); } catch { /* rien */ }
+    etat.uid = null; etat.profil = {};
+    afficherBienvenue('inscription');
+    toast('Ton compte a été supprimé.');
+  } catch (ex) { toast(ex.message, 5000); }
+});
+
+/* Administration : testeurs, offres, code provisoire. */
+const telLisible = (t) => String(t).replace(/^\+225(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/, '+225 $1 $2 $3 $4 $5');
+async function afficherTesteurs() {
+  const ul = $('#reg-admin-liste');
+  ul.innerHTML = '<li class="muted small">Chargement…</li>';
+  let comptes;
+  try { comptes = await api('/api/admin/comptes'); } catch (e) { ul.innerHTML = `<li class="small">${echapper(e.message)}</li>`; return; }
+  const actifs = comptes.filter((c) => c.derniereVisite && Date.now() - new Date(c.derniereVisite) < 7 * 864e5).length;
+  $('#reg-admin-resume').textContent = `${comptes.length} compte${comptes.length > 1 ? 's' : ''} · ${actifs} actif${actifs > 1 ? 's' : ''} cette semaine`;
+  ul.innerHTML = '';
+  for (const c of comptes) {
+    const li = document.createElement('li');
+    const vu = c.derniereVisite ? new Date(c.derniereVisite).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '–';
+    li.innerHTML = `<div><strong>${echapper(c.prenom || 'Sans prénom')}</strong>${c.role === 'admin' ? ' <span class="badge mini">admin</span>' : ''}<div class="small muted">${echapper(telLisible(c.telephone))} · vu le ${vu} · ${c.messagesAujourdhui} message${c.messagesAujourdhui > 1 ? 's' : ''} aujourd'hui</div></div>
+      <div class="actions-testeur"><label class="sr-only" for="o-${c.id}">Offre</label><select id="o-${c.id}">${Object.entries(NOMS_OFFRES).map(([k, n]) => `<option value="${k}"${k === c.offre ? ' selected' : ''}>${n}</option>`).join('')}</select>
+      <button type="button" class="btn small" data-pin>Code</button></div>`;
+    li.querySelector('select').onchange = async (e) => {
+      try { await api(`/api/admin/comptes/${c.id}`, { method: 'PUT', body: JSON.stringify({ offre: e.target.value }) }); toast(`${c.prenom || 'Compte'} : offre ${NOMS_OFFRES[e.target.value]}.`); } catch (ex) { toast(ex.message); }
+    };
+    li.querySelector('[data-pin]').onclick = async () => {
+      if (!confirm(`Créer un code provisoire pour ${c.prenom || c.telephone} ? Son code actuel ne marchera plus.`)) return;
+      try {
+        const r = await api(`/api/admin/comptes/${c.id}/pin`, { method: 'POST' });
+        li.querySelector('.pin-provisoire')?.remove();
+        const texte = `Bonjour ${c.prenom || ''}, voici ton code provisoire Tehis : ${r.pin}. Connecte-toi puis change-le dans Réglages › Mon compte.`;
+        li.insertAdjacentHTML('beforeend', `<div class="pin-provisoire">Code provisoire : <strong>${r.pin}</strong> · <a href="https://wa.me/${r.telephone.replace('+', '')}?text=${encodeURIComponent(texte)}" target="_blank" rel="noopener">l'envoyer sur WhatsApp</a></div>`);
+      } catch (ex) { toast(ex.message); }
+    };
+    ul.appendChild(li);
+  }
+}
+$('#reg-admin-maj').addEventListener('click', afficherTesteurs);
 
 /* Notifications push pour les rappels. */
 const pushPossible = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
@@ -891,8 +1181,17 @@ $('#reg-notif-btn').addEventListener('click', async () => {
 /* ---------- Démarrage ---------- */
 async function demarrer() {
   etat.statut = await api('/api/status');
-  if (!lsGet('tehis_bienvenue', false) || !etat.statut.authentifie) return afficherBienvenue();
+  configurerVoixIA(etat.statut.voixIA ? async (texte, espece) => {
+    const r = await fetch('/api/voix/parler', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ texte, espece }) });
+    if (!r.ok) throw new Error(`voix ${r.status}`);
+    return r.blob();
+  } : null);
+  initDictee();
+  majBoutonVoix();
+  if (!etat.statut.authentifie) return afficherBienvenue();
   etat.profil = await api('/api/profile');
+  etat.uid = etat.profil.compte;
+  reprendreAnciennesDiscussions();
   if (!etat.profil.espece) return afficherSetup();
   await ouvrirApp();
 }

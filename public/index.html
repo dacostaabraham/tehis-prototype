@@ -31,13 +31,50 @@
         <li><span aria-hidden="true">🧰</span> 12 agents experts : budget, santé, logement, CV…</li>
         <li><span aria-hidden="true">🎁</span> Gratuit pour commencer, sans carte bancaire</li>
       </ul>
-      <button class="btn primary" type="button" id="bienvenue-go">Commencer gratuitement</button>
-      <form id="login-form" class="beta" hidden autocomplete="on">
-        <p class="muted small">Bêta privée : entre ton code d'accès pour entrer.</p>
-        <label for="password">Code d'accès</label>
-        <input id="password" name="password" type="password" required autocomplete="current-password">
-        <p id="login-error" class="error" role="alert" hidden></p>
-        <button class="btn primary" type="submit">Entrer</button>
+      <div class="onglets-compte" role="tablist" aria-label="Compte">
+        <button type="button" role="tab" id="tab-inscription" aria-selected="true" aria-controls="form-inscription">Créer mon compte</button>
+        <button type="button" role="tab" id="tab-connexion" aria-selected="false" aria-controls="form-connexion">J'ai déjà un compte</button>
+      </div>
+      <form id="form-inscription" class="form-compte" autocomplete="on" novalidate>
+        <label for="ins-prenom">Ton prénom</label>
+        <input id="ins-prenom" name="given-name" type="text" maxlength="40" autocomplete="given-name" required>
+        <label for="ins-tel">Ton numéro WhatsApp</label>
+        <input id="ins-tel" name="tel" type="tel" inputmode="tel" autocomplete="tel" placeholder="07 07 12 34 56" required>
+        <label for="ins-pin">Choisis un code secret (4 à 6 chiffres)</label>
+        <input id="ins-pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="new-password" required>
+        <p class="muted small">Il te servira à te connecter sur un autre téléphone. Ne le partage avec personne.</p>
+        <div id="ins-invitation-zone" hidden>
+          <label for="ins-invitation">Code d'invitation</label>
+          <input id="ins-invitation" type="text" autocomplete="off" autocapitalize="characters">
+          <p class="muted small">Bêta privée : le code t'a été envoyé avec ton invitation.</p>
+        </div>
+        <p id="ins-erreur" class="error" role="alert" hidden></p>
+        <button class="btn primary" type="submit">Créer mon compte</button>
+      </form>
+      <form id="form-connexion" class="form-compte" autocomplete="on" novalidate hidden>
+        <label for="cnx-tel">Ton numéro</label>
+        <input id="cnx-tel" name="tel" type="tel" inputmode="tel" autocomplete="tel" placeholder="07 07 12 34 56" required>
+        <label for="cnx-pin">Ton code secret</label>
+        <input id="cnx-pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="current-password" required>
+        <p id="cnx-erreur" class="error" role="alert" hidden></p>
+        <button class="btn primary" type="submit">Me connecter</button>
+        <p class="muted small" id="oubli-texte">Code oublié ? Écris à l'équipe Tehis : elle t'enverra un code provisoire.</p>
+        <button type="button" class="lien" id="oubli-btn" hidden>Code oublié ? Recevoir un code sur WhatsApp</button>
+      </form>
+      <form id="form-oubli" class="form-compte" novalidate hidden>
+        <p class="small">Tu vas recevoir un code à 6 chiffres sur WhatsApp, au numéro de ton compte.</p>
+        <label for="oubli-tel">Ton numéro</label>
+        <input id="oubli-tel" type="tel" inputmode="tel" autocomplete="tel" placeholder="07 07 12 34 56" required>
+        <button class="btn primary" type="button" id="oubli-envoyer">Recevoir le code</button>
+        <div id="oubli-suite" class="form-compte" hidden>
+          <label for="oubli-code">Code reçu sur WhatsApp</label>
+          <input id="oubli-code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+          <label for="oubli-pin">Nouveau code secret (4 à 6 chiffres)</label>
+          <input id="oubli-pin" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password">
+          <button class="btn primary" type="submit">Changer mon code et entrer</button>
+        </div>
+        <p id="oubli-erreur" class="error" role="alert" hidden></p>
+        <button type="button" class="lien" id="oubli-retour">Retour</button>
       </form>
     </div>
   </main>
@@ -73,6 +110,11 @@
         <svg class="on" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"></path><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"></path></svg>
         <svg class="off" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"></path><path d="m17 9 5 6M22 9l-5 6"></path></svg>
       </button>
+      <button type="button" id="niveau-btn" class="niveau-btn" aria-haspopup="dialog" hidden>
+        <span class="niveau-anneau" aria-hidden="true"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.5" class="fond"></circle><circle cx="18" cy="18" r="15.5" class="plein" id="niveau-arc"></circle></svg><b id="niveau-num">1</b></span>
+        <span class="niveau-texte"><span id="niveau-nom">Petit</span><span id="niveau-serie" class="serie"></span></span>
+      </button>
+      <div id="gains" class="gains" aria-live="polite"></div>
     </section>
 
     <section id="panel-chat" class="panel" aria-label="Discussion">
@@ -132,8 +174,34 @@
         <div><strong>Ton compagnon</strong><p class="muted small" id="reg-compagnon"></p></div>
         <button class="btn small" type="button" id="reg-changer">Changer</button>
       </div>
-      <div class="reglage">
-        <div><strong>Offre</strong><p class="muted small" id="reg-offre"></p></div>
+      <div class="reglage col" id="reg-compte">
+        <div class="ligne"><div><strong>Mon compte</strong><p class="muted small" id="reg-tel"></p></div>
+        <button class="btn small" type="button" id="reg-deconnexion">Me déconnecter</button></div>
+        <div class="ligne"><div><strong>Offre</strong><p class="muted small" id="reg-offre"></p></div></div>
+        <div class="quota" id="reg-quota" aria-live="polite"></div>
+        <details class="compte-plus">
+          <summary>Changer mon code ou supprimer mon compte</summary>
+          <form id="form-pin" class="form-compte">
+            <label for="pin-ancien">Code actuel</label>
+            <input id="pin-ancien" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password" required>
+            <label for="pin-nouveau">Nouveau code (4 à 6 chiffres)</label>
+            <input id="pin-nouveau" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" required>
+            <p id="pin-msg" class="small" role="status"></p>
+            <button class="btn small accent" type="submit">Changer mon code</button>
+          </form>
+          <p class="muted small">Supprimer ton compte efface tes discussions, documents, rappels, listes, souvenirs et agents. C'est définitif.</p>
+          <button class="btn small danger" type="button" id="reg-supprimer">Supprimer mon compte</button>
+        </details>
+      </div>
+      <div class="reglage col" id="reg-whatsapp" hidden>
+        <div class="ligne"><div><strong>WhatsApp</strong><p class="muted small" id="reg-wa-texte">Parle à ton compagnon depuis WhatsApp, avec le numéro de ton compte.</p></div>
+        <a class="btn small accent" id="reg-wa-lien" target="_blank" rel="noopener">Ouvrir</a></div>
+        <label class="interrupteur"><input type="checkbox" id="reg-wa-rappels"><span>Recevoir aussi mes rappels sur WhatsApp</span></label>
+      </div>
+      <div class="reglage col" id="reg-admin" hidden>
+        <div class="ligne"><div><strong>Testeurs</strong><p class="muted small" id="reg-admin-resume">Comptes, offres et activité du jour.</p></div>
+        <button class="btn small" type="button" id="reg-admin-maj">Actualiser</button></div>
+        <ul class="liste-testeurs" id="reg-admin-liste"></ul>
       </div>
       <div class="reglage" id="reg-voix-ligne">
         <div><strong>Voix du compagnon</strong><p class="muted small" id="reg-voix">Lit les réponses à voix haute avec la voix française du téléphone.</p></div>
@@ -158,7 +226,7 @@
         </form>
       </div>
       <div class="reglage">
-        <div><strong>Discussions</strong><p class="muted small">Efface l'historique enregistré sur ce téléphone.</p></div>
+        <div><strong>Discussions</strong><p class="muted small">Efface l'historique de tes discussions, sur tous tes appareils.</p></div>
         <button class="btn small danger" type="button" id="reg-effacer">Effacer</button>
       </div>
       <p class="muted small" id="reg-version"></p>
@@ -219,6 +287,22 @@
         <div class="calc-actions"><button class="btn small" type="button" data-aller="2">Retour</button><button class="btn accent" type="button" id="perso-enregistrer">Créer l'agent</button></div>
         <button class="btn small danger" type="button" id="perso-supprimer" hidden>Supprimer cet agent</button>
       </section>
+    </dialog>
+
+    <dialog id="dlg-progression" class="sheet" aria-labelledby="prog-titre">
+      <div class="sheet-head"><h2 id="prog-titre">Ton compagnon grandit</h2><button type="button" class="icon-btn" data-fermer aria-label="Fermer">✕</button></div>
+      <div class="prog-fete" id="prog-fete" hidden></div>
+      <div class="prog-resume">
+        <div class="prog-niveau"><span class="prog-gros" id="prog-niveau"></span><span class="muted small" id="prog-points"></span></div>
+        <div class="barre-prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="prog-barre"><i></i></div>
+        <p class="small muted" id="prog-suivant"></p>
+        <div class="prog-stats"><div><strong id="prog-serie">0</strong><span class="small muted">jours de suite 🔥</span></div><div><strong id="prog-record">0</strong><span class="small muted">record</span></div><div><strong id="prog-agents">0</strong><span class="small muted">agents essayés</span></div></div>
+      </div>
+      <h3 class="prog-titre-section">Accessoires</h3>
+      <p class="small muted">Touche un accessoire débloqué pour le mettre ou l'enlever.</p>
+      <div class="prog-accessoires" id="prog-accessoires"></div>
+      <h3 class="prog-titre-section">Gagner des points</h3>
+      <ul class="prog-gains" id="prog-regles"></ul>
     </dialog>
 
     <dialog id="dlg-doc" class="sheet doc-sheet" aria-labelledby="dlg-doc-titre">

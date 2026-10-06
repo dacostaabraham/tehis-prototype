@@ -72,7 +72,7 @@ test('Mode développeur : clé absente = message clair, pas d\'appel réseau', a
 });
 
 test('Rappels : date d\'Abidjan, date passée refusée, répétition mensuelle', async () => {
-  const store = createStore();
+  const store = createStore().pour('00000000-0000-4000-8000-000000000001');
   const maintenant = new Date('2026-10-01T09:00:00Z');
   const r = await executerOrganisation(store, 'creer_rappel', { texte: 'Payer le loyer', quand: '2026-10-05T09:00', repetition: 'mensuel' }, maintenant);
   assert.equal(r.quand, '2026-10-05T09:00:00.000Z');
@@ -83,14 +83,14 @@ test('Rappels : date d\'Abidjan, date passée refusée, répétition mensuelle',
 });
 
 test('Listes : ajout sans doublon, coche, retrait', async () => {
-  const store = createStore();
+  const store = createStore().pour('00000000-0000-4000-8000-000000000001');
   await executerOrganisation(store, 'gerer_liste', { nom: 'Courses', ajouter: ['Riz', 'Huile', 'riz'] });
   const l = await executerOrganisation(store, 'gerer_liste', { nom: 'courses', cocher: ['Huile'], retirer: ['Riz'], ajouter: ['Attiéké'] });
   assert.deepEqual(l.items.map((i) => [i.texte, i.fait]), [['Huile', true], ['Attiéké', false]]);
 });
 
 test('Documents : enregistrés et vides refusés', async () => {
-  const store = createStore();
+  const store = createStore().pour('00000000-0000-4000-8000-000000000001');
   assert.ok((await creerDocument(store, { type: 'lettre', titre: 'x', contenu: '' })).erreur);
   const d = await creerDocument(store, { type: 'lettre', titre: 'Demande', contenu: 'Monsieur, …' }, 'redaction');
   assert.equal((await store.getDocument(d.id)).titre, 'Demande');

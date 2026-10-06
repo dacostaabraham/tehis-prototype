@@ -11,16 +11,33 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
-      - key: APP_PASSWORD
+      # Code d'invitation demandé à l'inscription (bêta privée). Vide = inscription ouverte.
+      - key: CODE_INVITATION
+        sync: false
+      # Ton numéro : le compte créé avec ce numéro devient administrateur.
+      - key: ADMIN_TELEPHONE
         sync: false
       - key: ANTHROPIC_API_KEY
+        sync: false
+      # Voix naturelle et transcription (facultatif).
+      - key: OPENAI_API_KEY
+        sync: false
+      # WhatsApp (facultatif, voir docs/WHATSAPP.md).
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_ID
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
         sync: false
       - key: ANTHROPIC_MODEL
         value: claude-sonnet-5-5
       - key: ANTHROPIC_MODEL_LEGER
         value: claude-haiku-4-5-20251001
-      - key: OFFRE_TEST
-        value: pro
+      # Offre des nouveaux comptes (modifiable ensuite par compte dans Réglages › Testeurs).
+      - key: OFFRE_DEFAUT
+        value: gratuit
       - key: SESSION_SECRET
         generateValue: true
       - key: DATABASE_URL

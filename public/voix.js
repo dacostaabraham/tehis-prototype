@@ -1,8 +1,21 @@
-// Voix du compagnon : synthèse vocale du navigateur (gratuite, voix françaises du téléphone).
-// Chaque espèce a sa hauteur et son débit. Sur iPhone, la voix doit être « débloquée » par un geste.
+// Voix du compagnon : voix naturelle (serveur, OpenAI) quand elle est configurée,
+// sinon synthèse vocale du navigateur (gratuite, voix françaises du téléphone).
+// Chaque espèce a sa voix (ou sa hauteur et son débit). Sur iPhone, le son doit être « débloqué » par un geste.
 
 const synth = window.speechSynthesis;
-export const voixDisponible = Boolean(synth && window.SpeechSynthesisUtterance);
+const synthDisponible = Boolean(synth && window.SpeechSynthesisUtterance);
+export let voixDisponible = synthDisponible;
+
+/* ---------- Voix naturelle (serveur) ---------- */
+let obtenirAudio = null; // (texte, espece) => Promise<Blob>
+let lecteur = null;
+let ctxAudio = null;
+/** Active la voix naturelle : fn(texte, espece) renvoie le mp3 (Blob). */
+export function configurerVoixIA(fn) {
+  obtenirAudio = typeof fn === 'function' ? fn : null;
+  voixDisponible = synthDisponible || Boolean(obtenirAudio && window.Audio);
+}
+export const voixNaturelle = () => Boolean(obtenirAudio);
 
 const PROFILS = {
   chat: { pitch: 1.25, rate: 1.05 },
@@ -23,13 +36,38 @@ if (voixDisponible) {
   synth.addEventListener?.('voiceschanged', choisirVoix);
 }
 
+// Fichier WAV de 10 ms de silence (8 kHz, 8 bits), construit ici plutôt que copié.
+const SILENCE = (() => {
+  const n = 80, b = new Uint8Array(44 + n), v = new DataView(b.buffer);
+  const ecrire = (o, t) => [...t].forEach((c, i) => { b[o + i] = c.charCodeAt(0); });
+  ecrire(0, 'RIFF'); v.setUint32(4, 36 + n, true); ecrire(8, 'WAVEfmt '); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, 8000, true); v.setUint32(28, 8000, true);
+  v.setUint16(32, 1, true); v.setUint16(34, 8, true); ecrire(36, 'data'); v.setUint32(40, n, true); b.fill(128, 44);
+  let bin = ''; b.forEach((x) => { bin += String.fromCharCode(x); });
+  return `data:audio/wav;base64,${btoa(bin)}`;
+})();
+
 /** À appeler pendant un geste de l'utilisateur (toucher) : autorise la voix sur iPhone. */
 let debloquee = false;
 export function debloquer() {
-  if (!voixDisponible || debloquee) return;
-  const u = new SpeechSynthesisUtterance(' ');
-  u.volume = 0;
-  synth.speak(u);
+  if (debloquee) return;
+  if (synthDisponible) {
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0;
+    synth.speak(u);
+  }
+  if (window.Audio) {
+    try {
+      lecteur = lecteur || new Audio();
+      lecteur.setAttribute('playsinline', '');
+      // Un son vide joué pendant le geste autorise les lectures suivantes sur iPhone.
+      lecteur.src = SILENCE;
+      lecteur.play().catch(() => {});
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC && !ctxAudio) ctxAudio = new AC();
+      ctxAudio?.resume?.().catch(() => {});
+    } catch { /* lecture non autorisée : la voix du téléphone servira */ }
+  }
   debloquee = true;
 }
 
@@ -86,15 +124,95 @@ function decouperLong(p, max = 200) {
   return morceaux.length ? morceaux : [p];
 }
 
+/** Regroupe les phrases en morceaux de 450 caractères au plus : moins d'appels, première phrase vite prête. */
+export function morceauxNaturels(t, max = 450) {
+  const ps = phrases(t);
+  const out = [];
+  let courant = '';
+  for (const p of ps) {
+    // Le premier morceau reste court pour que la voix démarre tout de suite.
+    const limite = out.length === 0 ? 160 : max;
+    if (courant && (courant + ' ' + p).length > limite) { out.push(courant); courant = p; } else courant = `${courant} ${p}`.trim();
+  }
+  if (courant) out.push(courant);
+  return out;
+}
+
+/** Enveloppe de volume (toutes les 60 ms) pour animer le compagnon au rythme de la vraie voix. */
+async function enveloppe(blob) {
+  try {
+    if (!ctxAudio) return null;
+    const donnees = await ctxAudio.decodeAudioData(await blob.arrayBuffer());
+    const canal = donnees.getChannelData(0);
+    const pas = Math.round(donnees.sampleRate * 0.06);
+    const env = [];
+    for (let i = 0; i < canal.length; i += pas) {
+      let somme = 0;
+      for (let j = i; j < Math.min(i + pas, canal.length); j++) somme += canal[j] * canal[j];
+      env.push(Math.sqrt(somme / pas));
+    }
+    const max = Math.max(...env, 0.0001);
+    return env.map((v) => v / max);
+  } catch { return null; }
+}
+
+function parlerNaturel(md, espece, ev, id) {
+  const morceaux = morceauxNaturels(texteParle(md));
+  if (!morceaux.length) return Promise.resolve(true);
+  lecteur = lecteur || new Audio();
+  return new Promise((resolve) => {
+    let i = 0;
+    let suivantAudio = obtenirAudio(morceaux[0], espece);
+    let anim = null;
+    const fini = (ok) => { cancelAnimationFrame(anim); if (id === session && ok) ev.fin?.(); resolve(ok); };
+    const jouer = async () => {
+      if (id !== session) return fini(true);
+      if (i >= morceaux.length) return fini(true);
+      let blob;
+      try { blob = await suivantAudio; } catch { return fini(false); } // échec : la voix du téléphone prend le relais
+      if (id !== session) return fini(true);
+      i++;
+      if (i < morceaux.length) suivantAudio = obtenirAudio(morceaux[i], espece); // préchargement du morceau suivant
+      const env = await enveloppe(blob);
+      const url = URL.createObjectURL(blob);
+      lecteur.src = url;
+      lecteur.onended = () => { URL.revokeObjectURL(url); jouer(); };
+      lecteur.onerror = () => { URL.revokeObjectURL(url); fini(false); };
+      try { await lecteur.play(); } catch { URL.revokeObjectURL(url); return fini(false); }
+      if (i === 1) ev.debut?.();
+      let dernier = 0, precedent = 0;
+      const boucle = () => {
+        if (id !== session || lecteur.paused) return;
+        const t = performance.now();
+        const v = env ? env[Math.floor(lecteur.currentTime / 0.06)] || 0 : (Math.sin(t / 130) > 0.6 ? 1 : 0);
+        if (v > 0.45 && v > precedent && t - dernier > 140) { ev.mot?.(); dernier = t; }
+        precedent = v;
+        anim = requestAnimationFrame(boucle);
+      };
+      anim = requestAnimationFrame(boucle);
+    };
+    jouer();
+  });
+}
+
 let session = 0;
 /**
  * Lit le texte. ev = { debut(), mot(), fin() }.
+ * Voix naturelle si elle est configurée, sinon (ou en cas d'échec) voix du téléphone.
  * Renvoie une promesse résolue à la fin (ou à l'arrêt).
  */
-export function parler(md, espece = 'chat', ev = {}) {
-  if (!voixDisponible) return Promise.resolve();
+export async function parler(md, espece = 'chat', ev = {}) {
+  if (!voixDisponible) return;
   arreter();
   const id = ++session;
+  if (obtenirAudio) {
+    const ok = await parlerNaturel(md, espece, ev, id);
+    if (ok || id !== session || !synthDisponible) { if (!ok && id === session) ev.fin?.(); return; }
+  }
+  return parlerTelephone(md, espece, ev, id);
+}
+
+function parlerTelephone(md, espece, ev, id) {
   const morceaux = phrases(texteParle(md));
   if (!morceaux.length) return Promise.resolve();
   const profil = PROFILS[espece] || PROFILS.chat;
@@ -126,9 +244,9 @@ export function parler(md, espece = 'chat', ev = {}) {
 }
 
 export function arreter() {
-  if (!voixDisponible) return;
   session++;
-  synth.cancel();
+  if (lecteur && !lecteur.paused) lecteur.pause();
+  if (synthDisponible) synth.cancel();
 }
 
-export const parleEnCeMoment = () => voixDisponible && (synth.speaking || synth.pending);
+export const parleEnCeMoment = () => (lecteur && !lecteur.paused) || (synthDisponible && (synth.speaking || synth.pending));
