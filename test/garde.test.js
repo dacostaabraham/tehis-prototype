@@ -51,7 +51,7 @@ test('Recherche de pharmacies : onglet de garde, pharmacie OSM reconnue comme de
     { type: 'node', id: 1, lat: 5.3251, lon: -4.0191, tags: { amenity: 'pharmacy', name: 'Pharmacie des Finances' } },
     { type: 'node', id: 2, lat: 5.3300, lon: -4.0200, tags: { amenity: 'pharmacy', name: 'Pharmacie Mazuet' } }
   ] }), { status: 200 });
-  const r = await chercherLieux({ categorie: 'pharmacie', garde: true }, { position: PLATEAU, gardes: async () => lireGardes(HTML) }, fauxOsm);
+  const r = await chercherLieux({ categorie: 'pharmacie', garde: true }, { position: PLATEAU, gardes: async () => lireGardes(HTML), sansLocal: true }, fauxOsm);
   assert.equal(r.garde.periode, 'du 3 octobre au 9 octobre 2026');
   assert.equal(r.gardeDAbord, true);
   assert.deepEqual(r.lieux.map((l) => [l.nom, l.garde]), [['Pharmacie des Finances', true], ['Pharmacie Mazuet', false]]);
