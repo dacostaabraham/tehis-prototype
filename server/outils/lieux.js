@@ -3,9 +3,10 @@
 // Gratuit, sans clé ; respecter les règles d'usage : User-Agent identifiable, cache, peu de requêtes.
 
 import { gardesDeLaSemaine, gardesProches, SOURCE_GARDE } from './garde.js';
+import { lieuxLocaux, geocoderLocal, chargerLieuxLocaux } from './lieux-local.js';
 
 // Serveurs remplaçables par variables d'environnement (instance privée, tests).
-const OVERPASS = (process.env.OVERPASS_URL || 'https://overpass-api.de/api/interpreter,https://overpass.kumi.systems/api/interpreter').split(',');
+const OVERPASS = (process.env.OVERPASS_URL || 'https://overpass-api.de/api/interpreter,https://overpass.private.coffee/api/interpreter,https://overpass.kumi.systems/api/interpreter').split(',');
 const NOMINATIM = process.env.NOMINATIM_URL || 'https://nominatim.openstreetmap.org/search';
 const UA = 'Tehis-Prototype/0.1 (assistant IA, Cote d\'Ivoire)';
 
@@ -108,8 +109,16 @@ export async function geocoder(texte, fetchImpl = fetch) {
   const deja = enCache(cle);
   if (deja !== undefined) return deja;
   const url = `${NOMINATIM}?format=jsonv2&limit=1&countrycodes=ci&accept-language=fr&q=${encodeURIComponent(q)}`;
-  const res = await appel(url, {}, fetchImpl, 12_000);
-  const r = res?.[0];
+  let res;
+  try { res = await appel(url, {}, fetchImpl, 8_000); } catch (e) {
+    // Nominatim injoignable : on cherche le quartier dans l'extrait local.
+    const local = geocoderLocal(q);
+    console.log(`[lieux] géocodage « ${q} » : Nominatim indisponible (${e.message}) → ${local ? `${local.libelle} (extrait local)` : 'introuvable'}`);
+    if (local) return enCache(cle, local);
+    throw e;
+  }
+  let r = res?.[0];
+  if (!r) { const local = geocoderLocal(q); if (local) return enCache(cle, local); }
   const resultat = r ? { lat: Number(r.lat), lng: Number(r.lon), libelle: r.display_name.split(',').slice(0, 3).join(',').trim() } : null;
   console.log(`[lieux] géocodage « ${q} » → ${resultat ? resultat.libelle : 'introuvable'}`);
   return enCache(cle, resultat);
@@ -187,6 +196,20 @@ function erreurReseau(e) {
 
   const cle = `lieux|${input.categorie}|${centre.lat.toFixed(3)}|${centre.lng.toFixed(3)}|${rayon}`;
   let elements = enCache(cle);
+  // 1. Extrait local (data/lieux-ci.json.gz) : instantané, sans réseau.
+  let localDisponible = false;
+  if (elements === undefined && !ctx.sansLocal) {
+    const local = lieuxLocaux(input.categorie, centre, Math.round(rayon * 1000));
+    if (local) {
+      localDisponible = true;
+      if (versLieux(local, centre).length) {
+        elements = local;
+        console.log(`[lieux] ${input.categorie} @${centre.lat.toFixed(3)},${centre.lng.toFixed(3)} → ${versLieux(local, centre).length} lieux (extrait local)`);
+        enCache(cle, elements);
+      }
+    }
+  }
+  // 2. Rien localement : on interroge Overpass en ligne.
   if (elements === undefined) {
     // Recherche par phases : une petite zone répond en quelques secondes même quand les
     // serveurs sont chargés (une grande zone dense se fait rejeter en 504). On élargit
@@ -211,7 +234,9 @@ function erreurReseau(e) {
     }
     if (derniereErreur && !elements.length) {
       console.warn(`[lieux] ${input.categorie} → abandon : ${derniereErreur.message}`);
-      return { erreur: erreurReseau(derniereErreur) };
+      // L'extrait local couvre la catégorie mais n'a rien dans ce rayon : réponse vide plutôt qu'une erreur.
+      if (!localDisponible) return { erreur: erreurReseau(derniereErreur) };
+      elements = [];
     }
     console.log(`[lieux] ${input.categorie} @${centre.lat.toFixed(3)},${centre.lng.toFixed(3)} → ${versLieux(elements, centre).length} lieux`);
     enCache(cle, elements);

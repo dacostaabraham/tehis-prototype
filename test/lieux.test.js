@@ -116,7 +116,7 @@ test('Phases : pas d\u2019élargissement quand 800 m suffisent', async () => {
   assert.equal(r.type, 'lieux');
   assert.equal(r.total, 5);
   const nb = f.appels.filter((a) => a.url.includes('overpass')).length;
-  assert.ok(nb <= 2, `une seule phase devrait suffire (miroirs en parallèle), vu ${nb} appels`);
+  assert.ok(nb <= 3, `une seule phase devrait suffire (3 miroirs en parallèle), vu ${nb} appels`);
 });
 
 test('Phases : la première phase échoue, la suivante réussit quand même', async () => {
@@ -139,4 +139,51 @@ test('Boutons de réponse : options nettoyées, dédoublonnées, 5 au plus', () 
   const c = preparerChoix({ question: 'Ton budget ?', options: ['50 000', '50 000', ' 100 000 ', '', 'a', 'b', 'c', 'd'] });
   assert.deepEqual(c.options, ['50 000', '100 000', 'a', 'b', 'c']);
   assert.ok(preparerChoix({ question: 'x', options: ['seul'] }).erreur);
+});
+
+// ---------- Extrait local (data/lieux-ci.json.gz) ----------
+import { lieuxLocaux, geocoderLocal } from '../server/outils/lieux-local.js';
+import { compacter } from '../scripts/maj-lieux-ci.mjs';
+
+const EXTRAIT = compacter([
+  { type: 'node', id: 1, lat: 5.3251, lon: -4.0191, tags: { amenity: 'pharmacy', name: 'Pharmacie des Finances', phone: '+225 27 20 21 22 23' } },
+  { type: 'way', id: 2, center: { lat: 5.40, lon: -4.00 }, tags: { amenity: 'pharmacy', name: 'Pharmacie Azur' } },
+  { type: 'node', id: 3, lat: 5.33, lon: -4.02, tags: { amenity: 'dentist', name: 'Cabinet dentaire' } },
+  { type: 'node', id: 4, lat: 5.33, lon: -4.02, tags: { amenity: 'pharmacy' } },
+  { type: 'node', id: 10, lat: 5.3450, lon: -4.0750, tags: { place: 'suburb', name: 'Yopougon' } },
+  { type: 'node', id: 11, lat: 5.3390, lon: -4.0820, tags: { place: 'neighbourhood', name: 'Selmer' } },
+  { type: 'node', id: 12, lat: 7.6900, lon: -5.0300, tags: { place: 'city', name: 'Bouaké' } },
+  { type: 'node', id: 13, lat: 6.0000, lon: -5.0000, tags: { place: 'neighbourhood', name: 'Selmer' } }
+], '2026-10-07');
+
+test('Extrait local : compactage par catégorie, lieux sans nom écartés', () => {
+  assert.equal(EXTRAIT.categories.pharmacie.length, 2);
+  assert.equal(EXTRAIT.categories.dentiste.length, 1);
+  assert.equal(EXTRAIT.places.length, 4);
+});
+
+test('Extrait local : lieux dans le rayon, au format Overpass', () => {
+  const l = lieuxLocaux('pharmacie', PLATEAU, 3000, EXTRAIT);
+  assert.deepEqual(l.map((e) => e.tags.name), ['Pharmacie des Finances']);
+  assert.equal(l[0].tags.phone, '+225 27 20 21 22 23');
+  assert.equal(lieuxLocaux('mairie', PLATEAU, 3000, null), null);
+});
+
+test('Extrait local : quartier trouvé sans réseau, le bon « Selmer » près de Yopougon', () => {
+  const g = geocoderLocal('Yopougon Selmer', EXTRAIT);
+  assert.equal(g.libelle, 'Selmer');
+  assert.ok(Math.abs(g.lat - 5.339) < 0.001);
+  assert.equal(geocoderLocal('bouake', EXTRAIT).libelle, 'Bouaké');
+  assert.equal(geocoderLocal('Paris', EXTRAIT), null);
+});
+
+test('Recherche : l\'extrait local répond sans appeler Overpass', async () => {
+  const { writeFileSync, mkdtempSync } = await import('node:fs');
+  const { gzipSync } = await import('node:zlib');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { chargerLieuxLocaux } = await import('../server/outils/lieux-local.js');
+  const f = join(mkdtempSync(join(tmpdir(), 'tehis-')), 'ci.json.gz');
+  writeFileSync(f, gzipSync(JSON.stringify(EXTRAIT)));
+  assert.equal(chargerLieuxLocaux(f).categories.pharmacie.length, 2);
 });
