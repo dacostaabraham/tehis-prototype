@@ -45,7 +45,7 @@ test('Sans position ni quartier : demande de position, aucun appel réseau', asy
 
 test('Avec position : requête Overpass par phases (800 m puis élargissement) et User-Agent', async () => {
   const f = fauxFetch([['overpass-api.de', { elements: ELEMENTS }]]);
-  const r = await chercherLieux({ categorie: 'pharmacie', rayon_km: 2 }, { position: { lat: 5.33641, lng: -4.02671 } }, f);
+  const r = await chercherLieux({ categorie: 'pharmacie', rayon_km: 2 }, { position: { lat: 5.33641, lng: -4.02671 }, sansLocal: true }, f);
   assert.equal(r.type, 'lieux');
   assert.equal(r.total, 2);
   const corps1 = decodeURIComponent(f.appels[0].opts.body);
@@ -71,14 +71,14 @@ test('Overpass : les miroirs sont interrogés en parallèle, le premier succès 
     return new Response(JSON.stringify({ elements: ELEMENTS }), { status: 200 });
   };
   const t0 = Date.now();
-  const r = await chercherLieux({ categorie: 'pharmacie' }, { position: { lat: 5.33641, lng: -4.02671 } }, f);
+  const r = await chercherLieux({ categorie: 'pharmacie' }, { position: { lat: 5.33641, lng: -4.02671 }, sansLocal: true }, f);
   assert.equal(r.type, 'lieux');
   assert.ok(Date.now() - t0 < 15_000, 'le miroir rapide doit gagner sans attendre le lent');
 });
 
 test('Overpass en panne partout : message lisible, sans jargon technique', async () => {
   const f = async () => { const e = new Error('This operation was aborted'); e.name = 'AbortError'; throw e; };
-  const r = await chercherLieux({ categorie: 'pharmacie' }, { position: { lat: 6.82, lng: -5.27 } }, f);
+  const r = await chercherLieux({ categorie: 'pharmacie' }, { position: { lat: 6.82, lng: -5.27 }, sansLocal: true }, f);
   assert.ok(r.erreur);
   assert.ok(!/abort/i.test(r.erreur), r.erreur);
 });
@@ -103,7 +103,7 @@ function fauxFetchPhases(parRayon) {
 
 test('Phases : élargissement à 2 km quand trop peu de résultats à 800 m', async () => {
   const f = fauxFetchPhases((rayon) => (rayon === '800' ? [] : ELEMENTS));
-  const r = await chercherLieux({ categorie: 'pharmacie', rayon_km: 3 }, { position: { lat: 5.36, lng: -4.05 } }, f);
+  const r = await chercherLieux({ categorie: 'pharmacie', rayon_km: 3 }, { position: { lat: 5.36, lng: -4.05 }, sansLocal: true }, f);
   assert.equal(r.type, 'lieux');
   assert.equal(r.total, 2);
   const rayons = f.appels.filter((a) => a.url.includes('overpass')).map((a) => Number(decodeURIComponent(a.opts.body).match(/around:(\d+),/)[1]));
@@ -112,7 +112,7 @@ test('Phases : élargissement à 2 km quand trop peu de résultats à 800 m', as
 
 test('Phases : pas d\u2019élargissement quand 800 m suffisent', async () => {
   const f = fauxFetchPhases(() => BEAUCOUP);
-  const r = await chercherLieux({ categorie: 'pharmacie', rayon_km: 3 }, { position: { lat: 5.34, lng: -4.03 } }, f);
+  const r = await chercherLieux({ categorie: 'pharmacie', rayon_km: 3 }, { position: { lat: 5.34, lng: -4.03 }, sansLocal: true }, f);
   assert.equal(r.type, 'lieux');
   assert.equal(r.total, 5);
   const nb = f.appels.filter((a) => a.url.includes('overpass')).length;
@@ -124,7 +124,7 @@ test('Phases : la première phase échoue, la suivante réussit quand même', as
     if (rayon === '800') { const e = new Error('timeout'); e.name = 'AbortError'; throw e; }
     return ELEMENTS;
   });
-  const r = await chercherLieux({ categorie: 'pharmacie', rayon_km: 3 }, { position: { lat: 5.35, lng: -4.04 } }, f);
+  const r = await chercherLieux({ categorie: 'pharmacie', rayon_km: 3 }, { position: { lat: 5.35, lng: -4.04 }, sansLocal: true }, f);
   assert.equal(r.type, 'lieux');
   assert.equal(r.total, 2);
 });
