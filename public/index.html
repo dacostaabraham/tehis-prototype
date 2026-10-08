@@ -304,6 +304,8 @@
         <input id="pay-nom" type="text" autocomplete="family-name" maxlength="50" required>
         <label for="pay-email">E-mail (pour ton reçu)</label>
         <input id="pay-email" type="email" inputmode="email" autocomplete="email" maxlength="255" required>
+        <label for="pay-code">Code promo <span class="muted">(facultatif)</span></label>
+        <input id="pay-code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="100">
         <p class="small muted">Le paiement se fait sur la page de Chariow. Tu reviens ensuite automatiquement dans Tehis.</p>
         <p id="pay-erreur" class="error" role="alert" hidden></p>
         <button class="btn primary" type="submit" id="pay-go">Payer avec Mobile Money</button>

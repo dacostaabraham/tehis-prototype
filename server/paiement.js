@@ -45,7 +45,7 @@ export function creerPaiement({ store, fetchImpl = fetch, config = configPaiemen
   }
 
   /** Ouvre une page de paiement Chariow pour ce compte. Renvoie { url, vente }. */
-  async function demarrer({ compte, offre, prenom, nom, email, ip, urlRetour }) {
+  async function demarrer({ compte, offre, prenom, nom, email, code, ip, urlRetour }) {
     const produit = config.produits[offre];
     if (!produit) throw Object.assign(new Error('Offre indisponible au paiement.'), { statut: 400 });
     const tel = String(compte.telephone || '');
@@ -55,6 +55,7 @@ export function creerPaiement({ store, fetchImpl = fetch, config = configPaiemen
       email, first_name: prenom, last_name: nom,
       phone: { number: ci ? tel.slice(4) : tel.replace(/^\+/, ''), country_code: 'CI' },
       custom_metadata: { compte: compte.id, offre },
+      ...(code ? { discount_code: code } : {}),
       ...(urlRetour ? { redirect_url: urlRetour } : {}),
       ...(ip ? { customer_ip: ip } : {})
     };

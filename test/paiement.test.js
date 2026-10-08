@@ -42,6 +42,18 @@ test('Page de paiement : bon produit, compte en métadonnées, numéro ivoirien,
   assert.equal((await store.pour(u.id).dernierPaiementEnAttente()).vente, 'sal_1');
 });
 
+test('Code promo transmis à Chariow ; réduction à 100 % : offre activée tout de suite', async () => {
+  const { store, u, p } = await preparer();
+  const f = async (url, opts) => { f.corps = JSON.parse(opts.body); return Response.json({ data: { step: 'completed', purchase: { id: 'sal_promo', status: 'completed', amount: { value: 0 } }, payment: { checkout_url: null } } }); };
+  const p2 = creerPaiement({ store, fetchImpl: f, config: CONFIG, journal: silencieux });
+  const r = await p2.demarrer({ compte: u, offre: 'plus', prenom: 'Awa', nom: 'Koné', email: 'awa@exemple.ci', code: 'TESTTEHIS' });
+  assert.equal(f.corps.discount_code, 'TESTTEHIS');
+  assert.equal(r.etape, 'completed');
+  assert.equal((await store.getUser(u.id)).offre, 'plus');
+  assert.deepEqual(await p2.pulse({ event: 'successful.sale', sale: { id: 'sal_promo', custom_metadata: { compte: u.id } }, product: { id: 'prd_plus' } }), { deja: true });
+  void p;
+});
+
 test('Pulse « vente réussie » : 30 jours de Plus, appliqué une seule fois même si Chariow réessaie', async () => {
   const { store, u, p } = await preparer();
   const pulse = { event: 'successful.sale', sale: { id: 'sal_9', status: 'completed', custom_metadata: { compte: u.id, offre: 'plus' }, amount: { value: 2500 } }, product: { id: 'prd_plus' }, customer: { phone: '+2250707000001' } };

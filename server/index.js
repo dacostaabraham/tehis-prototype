@@ -501,19 +501,22 @@ app.post('/api/paiement', limite, async (req, res) => {
   const prenom = String(req.body?.prenom || '').trim().slice(0, 50);
   const nom = String(req.body?.nom || '').trim().slice(0, 50);
   const email = String(req.body?.email || '').trim().slice(0, 255);
+  const code = String(req.body?.code || '').trim().toUpperCase();
   if (!['plus', 'pro'].includes(offre)) return res.status(400).json({ erreur: 'Offre inconnue.' });
+  if (code && !/^[A-Z0-9_-]{1,100}$/.test(code)) return res.status(400).json({ erreur: 'Code promo invalide : lettres et chiffres seulement.' });
   if (!prenom || !nom) return res.status(400).json({ erreur: 'Indique ton prénom et ton nom, comme sur ton compte Mobile Money.' });
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ erreur: 'Adresse e-mail invalide : Chariow y envoie ton reçu.' });
   await req.store.setProfile({ nomFamille: nom, email });
   try {
     const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || undefined;
-    const r = await PAIEMENT.service.demarrer({ compte: req.compte, offre, prenom, nom, email, ip, urlRetour: URL_APP ? `${URL_APP}/?paiement=retour` : undefined });
+    const r = await PAIEMENT.service.demarrer({ compte: req.compte, offre, prenom, nom, email, code, ip, urlRetour: URL_APP ? `${URL_APP}/?paiement=retour` : undefined });
     if (r.etape === 'completed') return res.json({ termine: true });
     if (!r.url) return res.status(502).json({ erreur: r.message || 'Paiement indisponible pour le moment.' });
     res.json({ url: r.url });
   } catch (e) {
     console.error(e.statut === 401 ? '[ALERTE ADMIN] CLÉ CHARIOW REFUSÉE : vérifier CHARIOW_API_KEY' : e.statut === 404 ? '[ALERTE ADMIN] PRODUIT CHARIOW INTROUVABLE OU NON PUBLIÉ : vérifier CHARIOW_PRODUIT_PLUS / PRO' : 'Paiement :', e.statut, e.message, JSON.stringify(e.details || ''));
-    res.status(e.statut === 422 ? 400 : 502).json({ erreur: e.statut === 422 ? (e.message || 'Informations refusées par Chariow.') : 'Le paiement est indisponible pour le moment. Réessaie dans quelques minutes.' });
+    const codeRefuse = e.statut === 422 && e.details && 'discount_code' in e.details;
+    res.status(e.statut === 422 ? 400 : 502).json({ erreur: codeRefuse ? 'Ce code promo est invalide, expiré ou ne s\'applique pas à cette offre.' : e.statut === 422 ? (e.message || 'Informations refusées par Chariow.') : 'Le paiement est indisponible pour le moment. Réessaie dans quelques minutes.' });
   }
 });
 /** Retour de la page de paiement : on vérifie la dernière vente en attente auprès de Chariow. */

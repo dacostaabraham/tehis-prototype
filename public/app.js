@@ -943,6 +943,7 @@ function etapePaiement(id) {
   $('#pay-prenom').value = etat.profil.prenom || '';
   $('#pay-nom').value = etat.profil.nomFamille || '';
   $('#pay-email').value = etat.profil.email || '';
+  $('#pay-code').value = '';
   $('#pay-erreur').hidden = true;
   $('#offres-etape1').hidden = true; $('#offres-etape2').hidden = false;
   ($('#pay-nom').value ? $('#pay-email') : $('#pay-nom')).focus();
@@ -953,7 +954,7 @@ $('#offres-etape2').addEventListener('submit', async (e) => {
   const err = $('#pay-erreur'); err.hidden = true;
   const b = $('#pay-go'); b.disabled = true; b.textContent = 'Ouverture du paiement…';
   try {
-    const r = await api('/api/paiement', { method: 'POST', body: JSON.stringify({ offre: offreChoisie, prenom: $('#pay-prenom').value, nom: $('#pay-nom').value, email: $('#pay-email').value }) });
+    const r = await api('/api/paiement', { method: 'POST', body: JSON.stringify({ offre: offreChoisie, prenom: $('#pay-prenom').value, nom: $('#pay-nom').value, email: $('#pay-email').value, code: $('#pay-code').value.trim() }) });
     if (r.termine) { fermerDialogues(); await verifierPaiement(); return; }
     lsSet('tehis_paiement_en_cours', Date.now());
     location.href = r.url;
