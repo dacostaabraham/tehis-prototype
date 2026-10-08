@@ -444,3 +444,16 @@ select { width: 100%; min-height: 46px; padding: 10px 12px; border-radius: 12px;
 .interrupteur input { width: 20px; height: 20px; accent-color: var(--accent); }
 .interrupteur, .interrupteur span { text-transform: none; letter-spacing: normal; font: 500 14px var(--body); color: var(--ink); }
 a.btn { text-decoration: none; }
+
+/* Offres */
+.offres-grille { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.offre-carte { border: 2px solid var(--line); border-radius: 16px; padding: 14px; background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
+.offre-carte.actuelle { border-color: var(--accent); }
+.offre-carte.mise-en-avant { border-color: var(--warn); box-shadow: 0 4px 14px rgb(0 0 0 / .06); }
+.offre-tete { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.offre-tete strong { font: 700 18px var(--display); }
+.offre-prix { font: 700 18px var(--display); color: var(--accent); white-space: nowrap; }
+.offre-prix small { font: 500 12px var(--body); color: var(--muted); }
+.offre-carte ul { margin: 0; padding-left: 18px; font-size: 14px; display: flex; flex-direction: column; gap: 3px; }
+.offre-etiquette { align-self: flex-start; font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--warn-soft); color: var(--warn); }
+.offre-recap { background: var(--accent-soft); border-radius: 12px; padding: 10px 12px; margin: 0 0 4px; font-size: 14.5px; }

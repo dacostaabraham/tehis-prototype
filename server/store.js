@@ -18,7 +18,8 @@ const PAR_COMPTE = new Set([
   'addAction', 'getAction', 'updateAction', 'getSecret', 'setSecret',
   'listCustomAgents', 'getCustomAgent', 'saveCustomAgent', 'deleteCustomAgent',
   'incrementUsage', 'getUsage', 'addSubscription', 'listSubscriptions',
-  'getConversation', 'saveConversation', 'deleteConversations', 'getProgression', 'saveProgression'
+  'getConversation', 'saveConversation', 'deleteConversations', 'getProgression', 'saveProgression',
+  'listPaiements', 'dernierPaiementEnAttente'
 ]);
 
 function vue(store, uid) {
@@ -147,6 +148,18 @@ class MemoryStore {
 
   async getProgression(uid) { return this.users.find((u) => u.id === uid)?.progression || null; }
   async saveProgression(uid, p) { const u = this.users.find((x) => x.id === uid); if (u) u.progression = p; return p; }
+
+  /* Paiements (ventes Chariow) : une ligne par vente, appliquée une seule fois. */
+  async addPaiement({ vente, user_id, offre, montant = null, statut = 'en_attente' }) {
+    this.paiements ||= [];
+    const p = { vente, user_id, offre, montant, statut, applique: false, created_at: new Date().toISOString() };
+    if (!this.paiements.some((x) => x.vente === vente)) this.paiements.push(p);
+    return this.paiements.find((x) => x.vente === vente);
+  }
+  async getPaiement(vente) { return (this.paiements || []).find((x) => x.vente === vente) || null; }
+  async updatePaiement(vente, champs) { const p = await this.getPaiement(vente); if (p) Object.assign(p, champs); return p; }
+  async listPaiements(uid) { return (this.paiements || []).filter((p) => p.user_id === uid).sort(tri('created_at')); }
+  async dernierPaiementEnAttente(uid) { return (await this.listPaiements(uid)).find((p) => p.statut === 'en_attente') || null; }
 }
 
 const TABLES_COMPTE = ['memories', 'documents', 'reminders', 'lists', 'actions', 'push_subscriptions', 'custom_agents'];
@@ -175,6 +188,8 @@ class PgStore {
         offre text not null default 'gratuit', role text not null default 'testeur',
         data jsonb not null default '{}'::jsonb, progression jsonb,
         created_at timestamptz not null default now(), derniere_visite timestamptz);
+      create table if not exists paiements (vente text primary key, user_id uuid not null, offre text, montant numeric, statut text not null default 'en_attente', applique boolean not null default false, created_at timestamptz not null default now());
+      create index if not exists paiements_user on paiements (user_id);
       create table if not exists conversations (user_id uuid not null, agent text not null, items jsonb not null, updated_at timestamptz not null default now(), primary key (user_id, agent));
       alter table users add column if not exists progression jsonb;
       ${TABLES_COMPTE.map((t) => `alter table ${t} add column if not exists user_id uuid; create index if not exists ${t}_user on ${t} (user_id);`).join('\n')}
@@ -201,6 +216,7 @@ class PgStore {
   async deleteUser(id) {
     for (const t of TABLES_COMPTE) await this.q(`delete from ${t} where user_id = $1`, [id]);
     await this.q('delete from conversations where user_id = $1', [id]);
+    await this.q('delete from paiements where user_id = $1', [id]);
     await this.q('delete from secrets where nom like $1', [`u:${id}:%`]);
     await this.q('delete from usage where cle like $1', [`${id}|%`]);
     await this.q('delete from users where id = $1', [id]);
@@ -284,6 +300,17 @@ class PgStore {
 
   async getProgression(uid) { return (await this.q('select progression from users where id = $1', [uid])).rows[0]?.progression || null; }
   async saveProgression(uid, p) { await this.q('update users set progression = $2 where id = $1', [uid, JSON.stringify(p)]); return p; }
+
+  async addPaiement({ vente, user_id, offre, montant = null, statut = 'en_attente' }) {
+    await this.q('insert into paiements (vente, user_id, offre, montant, statut) values ($1,$2,$3,$4,$5) on conflict (vente) do nothing', [vente, user_id, offre, montant, statut]);
+    return this.getPaiement(vente);
+  }
+  async getPaiement(vente) { return (await this.q('select * from paiements where vente = $1', [vente])).rows[0] || null; }
+  async updatePaiement(vente, { statut, applique, offre }) {
+    return (await this.q('update paiements set statut = coalesce($2, statut), applique = coalesce($3, applique), offre = coalesce($4, offre) where vente = $1 returning *', [vente, statut ?? null, applique ?? null, offre ?? null])).rows[0];
+  }
+  async listPaiements(uid) { return (await this.q('select * from paiements where user_id = $1 order by created_at desc limit 50', [uid])).rows; }
+  async dernierPaiementEnAttente(uid) { return (await this.q("select * from paiements where user_id = $1 and statut = 'en_attente' order by created_at desc limit 1", [uid])).rows[0] || null; }
 }
 
 export function createStore() {

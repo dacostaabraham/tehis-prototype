@@ -27,7 +27,8 @@ Compagnon IA en 3D avec des **agents du quotidien** pour la Côte d'Ivoire, et u
 - **Documents** : lettres, CV, fiches produits et fiches de révision s'affichent dans une carte avec *Copier*, *WhatsApp* et *PDF*, et restent dans « Mes affaires ».
 - **Voix du compagnon** : il lit ses réponses à voix haute (voix française du téléphone, hauteur et débit selon l'espèce) et s'anime pendant qu'il parle (humeur « Je parle »). Bouton haut-parleur sur la scène pour couper ou remettre, bouton « Écouter » sous chaque réponse, test dans Réglages.
 - **Photo** jointe à un message (produit, exercice, document) et **dictée vocale** (si le navigateur la propose).
-- **Lieux hors ligne** : un extrait OpenStreetMap de la Côte d'Ivoire (`data/lieux-ci.json.gz`, 130 Ko : pharmacies, santé, marchés, stations, mairies, police, poste, transfert d'argent, quartiers) répond sans réseau ; les serveurs Overpass et Nominatim ne servent plus que de secours. Mise à jour mensuelle : `node scripts/maj-lieux-ci.mjs` puis commit.
+- **Paiement des offres** (Chariow) : Plus 2 500 FCFA et Pro 10 000 FCFA par mois, par Mobile Money ou carte. 30 jours par paiement, prolongeables ; confirmation par Pulse signé et par vérification directe ; retour automatique en Gratuit à l'échéance, rappel 3 jours avant. Mise en place : [docs/PAIEMENT.md](docs/PAIEMENT.md).
+- **Lieux hors ligne** : un extrait OpenStreetMap de la Côte d'Ivoire (`data/lieux-ci.json.gz`, 200 Ko : pharmacies, santé, marchés, écoles, banques, stations, mairies, police, poste, transfert d'argent, quartiers) répond sans réseau ; les serveurs Overpass et Nominatim ne servent plus que de secours. Mise à jour mensuelle : `node scripts/maj-lieux-ci.mjs` puis commit.
 - **Autour de moi** (Santé, Démarches, Logement, Compagnon, agents perso) : pharmacies, centres de santé, hôpitaux, mairies, marchés… sur une carte (OpenStreetMap) avec distance, *Y aller* (voiture, à pied, transport), *Appeler* et *Partager*. Position partagée à la demande, ou quartier écrit. Fonctionne sans clé API.
 - **Pharmacies de garde** : la liste officielle de la semaine (abidjan.net, Abidjan et villes de l'intérieur) est lue toutes les 6 heures et croisée avec la carte : onglet « 🌙 De garde » avec distance, téléphone et itinéraire, affiché en premier la nuit et le week-end. Les positions incohérentes de la source sont écartées (la pharmacie reste listée dans sa commune).
 - **Le compagnon grandit** : points (discussions, nouveaux agents, documents, rappels, recherches, calculs, visite du jour), 8 niveaux de « Petit » à « Légende », série de jours avec bonus, et accessoires 3D débloqués (foulard en pagne, bob, lunettes, médaille, couronne).
@@ -93,6 +94,9 @@ Compagnon IA en 3D avec des **agents du quotidien** pour la Côte d'Ivoire, et u
 | `OPENAI_TTS_MODEL`, `OPENAI_STT_MODEL` | Modèles de voix et de transcription | `gpt-4o-mini-tts`, `gpt-4o-mini-transcribe` |
 | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_NUMERO` | WhatsApp Cloud API (voir docs/WHATSAPP.md) | vide = WhatsApp désactivé |
 | `WHATSAPP_MODELE_RAPPEL`, `WHATSAPP_MODELE_CODE` | Modèles approuvés : rappels hors 24 h, code oublié | vide |
+| `CHARIOW_API_KEY`, `CHARIOW_PULSE_SECRET`, `CHARIOW_PRODUIT_PLUS`, `CHARIOW_PRODUIT_PRO` | Paiement des offres (voir docs/PAIEMENT.md) | vide = paiement fermé |
+| `APP_URL` | Adresse publique de l'app (retour après paiement, liens WhatsApp) | adresse Render |
+| `DUREE_OFFRE_JOURS` | Durée d'un paiement | `30` |
 | `GARDE_URL` | Page de la liste des pharmacies de garde | business.abidjan.net |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Clés des notifications | générées et gardées en base |
 
@@ -119,7 +123,7 @@ ANTHROPIC_API_KEY=faux ANTHROPIC_BASE_URL=http://localhost:4999 npm start
 - **Dictée vocale** : elle dépend du navigateur (Chrome Android, Safari récent). Sinon, le clavier du téléphone a souvent un micro.
 - La 3D charge Three.js depuis internet (jsDelivr). Sans réseau ou sans WebGL, l'app affiche l'image de l'animal.
 - Les agents ne sont ni expert-comptable, ni conseiller fiscal, ni avocat : ils le rappellent quand c'est nécessaire.
-- Comptes et offres : l'administrateur change l'offre d'un testeur et lui crée un code provisoire dans Réglages › Testeurs. Le paiement Chariow viendra ensuite.
+- Comptes et offres : chacun paie son offre par Chariow ; l'administrateur peut aussi donner une offre (sans date de fin) et créer un code provisoire dans Réglages › Testeurs.
 
 ## Quotas par jour
 
@@ -149,6 +153,9 @@ server/comptes.js            numéro, code secret, sessions, essais limités
 server/quotas.js             quotas du jour et choix du modèle
 server/outils/garde.js       pharmacies de garde de la semaine
 server/voix-ia.js            voix naturelle et transcription (OpenAI)
+server/paiement.js           paiement Chariow : page de paiement, Pulse, prolongation, expiration
+server/outils/lieux-local.js lieux et quartiers de Côte d'Ivoire sans réseau
+scripts/maj-lieux-ci.mjs     mise à jour de l'extrait OpenStreetMap
 server/whatsapp.js           WhatsApp Cloud API : envoi, webhook, signature
 server/canal-whatsapp.js     conversations, rappels et codes sur WhatsApp
 public/shared/progression.js points, niveaux, série, accessoires

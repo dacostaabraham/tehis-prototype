@@ -11,6 +11,7 @@ import { quotaDe, choisirModele, etatQuota, jourAbidjan } from './quotas.js';
 import { voixIAActive, synthetiser, transcrire, quotaVoix, alerteVoix, typeAudioAccepte } from './voix-ia.js';
 import { configWhatsApp, whatsappActif, signatureValide, lireWebhook, creerClientWhatsApp } from './whatsapp.js';
 import { creerCanalWhatsApp } from './canal-whatsapp.js';
+import { configPaiement, paiementActif, signaturePulseValide, offreEffective, creerPaiement } from './paiement.js';
 import { appliquer, resume as resumeProgression, accessoiresDebloques, niveauPour, ACCESSOIRES } from '../public/shared/progression.js';
 import { instructionsStatiques, contexteDynamique, outils, OUTIL_RECHERCHE_WEB } from './agents.js';
 import { reponseDemo } from './demo.js';
@@ -23,7 +24,7 @@ import { preparerChoix } from './outils/interaction.js';
 import { executerDev, preparerAction, OUTILS_A_VALIDER, SCHEMAS_DEV } from './outils/dev.js';
 import { OUTILS_FINANCE } from '../public/shared/finance.js';
 import { OUTILS_BUDGET } from '../public/shared/budget.js';
-import { AGENTS, OFFRES, accesAgent, estPerso } from '../public/shared/agents.js';
+import { AGENTS, OFFRES, NOMS_OFFRES as NOMS_OFFRES_SERVEUR, accesAgent, estPerso } from '../public/shared/agents.js';
 import { nettoyerFiche, instructionsPerso, outilsPerso, limites, OUTIL_FICHE, SYSTEME_FICHE, ficheDemo } from './perso.js';
 import { markdown, echapper } from '../public/shared/markdown.js';
 
@@ -50,6 +51,7 @@ const app = express();
 app.disable('x-powered-by');
 // WhatsApp : corps brut, nécessaire pour vérifier la signature de Meta.
 app.use('/webhook/whatsapp', express.raw({ type: '*/*', limit: '2mb' }));
+app.use('/webhook/chariow', express.raw({ type: '*/*', limit: '1mb' }));
 app.use('/api/chat', express.json({ limit: '8mb' }));
 app.use('/api/conversations', express.json({ limit: '1mb' }));
 app.use('/api/voix/transcrire', express.raw({ type: (req) => Boolean(typeAudioAccepte(req.headers['content-type'])), limit: '8mb' }));
@@ -157,6 +159,32 @@ app.post('/webhook/whatsapp', (req, res) => {
   } catch (e) { console.error('[WhatsApp] notification illisible :', e.message); }
 });
 
+/* ---------- Paiement Chariow : Pulse signé ---------- */
+const PAIEMENT = { config: configPaiement(), actif: paiementActif() };
+PAIEMENT.service = creerPaiement({ store, config: PAIEMENT.config });
+const livraisonsVues = new Set();
+app.post('/webhook/chariow', async (req, res) => {
+  if (!PAIEMENT.config.secretPulse) return res.sendStatus(404);
+  if (!signaturePulseValide(req.body, req.headers['x-chariow-signature'], PAIEMENT.config.secretPulse)) {
+    console.warn('[PAIEMENT] Pulse à signature invalide : ignoré');
+    return res.status(401).send('Signature invalide');
+  }
+  const livraison = req.headers['x-pulse-delivery-id'];
+  if (livraison && livraisonsVues.has(livraison)) return res.status(200).send('OK');
+  let corps;
+  try { corps = JSON.parse(req.body.toString('utf8')); } catch { return res.status(400).send('JSON invalide'); }
+  if (corps.note && !livraison) { console.log('[PAIEMENT] Pulse de test reçu et vérifié'); return res.status(200).send('OK'); }
+  try {
+    const r = await PAIEMENT.service.pulse(corps);
+    if (livraison) { livraisonsVues.add(livraison); if (livraisonsVues.size > 5000) livraisonsVues.clear(); }
+    console.log(`[PAIEMENT] Pulse ${corps.event} ${corps.sale?.id || ''} → ${JSON.stringify(r)}`);
+    res.status(200).send('OK');
+  } catch (e) {
+    console.error('[ALERTE ADMIN] Pulse Chariow non traité :', e.message);
+    res.status(500).send('Erreur'); // Chariow réessaiera
+  }
+});
+
 /* ---------- Code secret oublié : nouveau code par WhatsApp ---------- */
 const codesOublies = new Map(); // téléphone → { hache, expire, essais }
 app.post('/api/code-oublie', async (req, res) => {
@@ -199,6 +227,12 @@ app.use('/api', async (req, res, next) => {
   try {
     const compte = await compteDeLaRequete(req);
     if (!compte) return res.status(401).json({ erreur: 'Connexion requise.' });
+    // Offre payée arrivée à échéance : retour à l'offre Gratuit.
+    const effective = offreEffective(compte);
+    if (effective !== compte.offre) {
+      Object.assign(compte, await store.updateUser(compte.id, { offre: effective, data: { offreExpiree: compte.offre } }));
+      console.log(`[PAIEMENT] Offre ${compte.data?.offreExpiree} expirée pour ${compte.id.slice(0, 8)} : retour en Gratuit`);
+    }
     req.compte = compte;
     req.store = store.pour(compte.id);
     // Dernière visite, au plus une fois par heure (tableau de bord des testeurs).
@@ -211,7 +245,10 @@ app.use('/api', async (req, res, next) => {
 
 /* ---------- Mon compte ---------- */
 app.get('/api/compte', async (req, res) => {
-  res.json({ telephone: masquerTelephone(req.compte.telephone), offre: req.compte.offre, role: req.compte.role, quota: await etatQuota(req.store, req.compte), depuis: req.compte.created_at });
+  res.json({
+    telephone: masquerTelephone(req.compte.telephone), offre: req.compte.offre, role: req.compte.role, quota: await etatQuota(req.store, req.compte), depuis: req.compte.created_at,
+    offreJusquau: req.compte.data?.offreSource === 'chariow' ? req.compte.data.offreJusquau : null, offreExpiree: req.compte.data?.offreExpiree || null
+  });
 });
 app.put('/api/compte/pin', async (req, res) => {
   const u = await store.getUserAuthById(req.compte.id);
@@ -244,7 +281,8 @@ app.get('/api/admin/comptes', admin, async (_req, res) => {
 app.put('/api/admin/comptes/:id', admin, async (req, res) => {
   const offre = req.body?.offre;
   if (!OFFRES.includes(offre)) return res.status(400).json({ erreur: 'Offre inconnue.' });
-  const u = await store.updateUser(req.params.id, { offre });
+  // Offre donnée à la main : sans date de fin (une offre payée garde sa date si on la remet).
+  const u = await store.updateUser(req.params.id, { offre, data: { offreSource: 'admin', offreJusquau: null } });
   return u ? res.json({ ok: true, offre: u.offre }) : res.status(404).json({ erreur: 'Compte introuvable.' });
 });
 app.post('/api/admin/comptes/:id/pin', admin, async (req, res) => {
@@ -453,6 +491,41 @@ app.put('/api/progression/portes', async (req, res) => {
   if (!prog) Object.assign(maj, appliquer(null, []).progression, { portes });
   await req.store.saveProgression(maj);
   res.json(resumeProgression(maj));
+});
+
+/* ---------- Offres et paiement ---------- */
+app.get('/api/offres', (req, res) => res.json({ paiement: PAIEMENT.actif, offres: Object.keys(PAIEMENT.config.produits).filter((o) => PAIEMENT.config.produits[o]), dureeJours: PAIEMENT.config.dureeJours }));
+app.post('/api/paiement', limite, async (req, res) => {
+  if (!PAIEMENT.actif) return res.status(503).json({ erreur: "Le paiement en ligne n'est pas encore ouvert. Écris à l'équipe Tehis." });
+  const offre = req.body?.offre;
+  const prenom = String(req.body?.prenom || '').trim().slice(0, 50);
+  const nom = String(req.body?.nom || '').trim().slice(0, 50);
+  const email = String(req.body?.email || '').trim().slice(0, 255);
+  if (!['plus', 'pro'].includes(offre)) return res.status(400).json({ erreur: 'Offre inconnue.' });
+  if (!prenom || !nom) return res.status(400).json({ erreur: 'Indique ton prénom et ton nom, comme sur ton compte Mobile Money.' });
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ erreur: 'Adresse e-mail invalide : Chariow y envoie ton reçu.' });
+  await req.store.setProfile({ nomFamille: nom, email });
+  try {
+    const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || undefined;
+    const r = await PAIEMENT.service.demarrer({ compte: req.compte, offre, prenom, nom, email, ip, urlRetour: URL_APP ? `${URL_APP}/?paiement=retour` : undefined });
+    if (r.etape === 'completed') return res.json({ termine: true });
+    if (!r.url) return res.status(502).json({ erreur: r.message || 'Paiement indisponible pour le moment.' });
+    res.json({ url: r.url });
+  } catch (e) {
+    console.error(e.statut === 401 ? '[ALERTE ADMIN] CLÉ CHARIOW REFUSÉE : vérifier CHARIOW_API_KEY' : e.statut === 404 ? '[ALERTE ADMIN] PRODUIT CHARIOW INTROUVABLE OU NON PUBLIÉ : vérifier CHARIOW_PRODUIT_PLUS / PRO' : 'Paiement :', e.statut, e.message, JSON.stringify(e.details || ''));
+    res.status(e.statut === 422 ? 400 : 502).json({ erreur: e.statut === 422 ? (e.message || 'Informations refusées par Chariow.') : 'Le paiement est indisponible pour le moment. Réessaie dans quelques minutes.' });
+  }
+});
+/** Retour de la page de paiement : on vérifie la dernière vente en attente auprès de Chariow. */
+app.post('/api/paiement/verifier', async (req, res) => {
+  if (!PAIEMENT.actif) return res.json({ offre: req.compte.offre });
+  const attente = await req.store.dernierPaiementEnAttente();
+  if (attente) {
+    try { await PAIEMENT.service.verifier(attente.vente); } catch (e) { console.warn('Vérification paiement :', e.statut, e.message); }
+  }
+  const compte = await store.getUser(req.compte.id);
+  const p = await store.getPaiement(attente?.vente || '');
+  res.json({ offre: compte.offre, offreJusquau: compte.data?.offreJusquau || null, statut: p?.statut || null });
 });
 
 /* ---------- Voix du compagnon (OpenAI) ---------- */
@@ -801,8 +874,26 @@ if (WHATSAPP.actif) {
   });
 }
 notifications = await initNotifications(store, { autresCanaux: WHATSAPP.canal ? (r) => WHATSAPP.canal.rappel(r) : null });
+
+// Offres payées : rappel de renouvellement 3 jours avant la fin (notification, et WhatsApp si demandé).
+async function rappelerRenouvellements(maintenant = Date.now()) {
+  if (!PAIEMENT.actif) return 0;
+  let n = 0;
+  for (const u of await store.listUsers()) {
+    const fin = u.data?.offreSource === 'chariow' && u.data?.offreJusquau ? new Date(u.data.offreJusquau).getTime() : 0;
+    if (!fin || fin < maintenant || fin - maintenant > 3 * 86_400_000 || u.data.rappelRenouvellement === u.data.offreJusquau) continue;
+    const jours = Math.max(1, Math.ceil((fin - maintenant) / 86_400_000));
+    const texte = `Ton offre ${NOMS_OFFRES_SERVEUR[u.offre] || u.offre} se termine dans ${jours} jour${jours > 1 ? 's' : ''}. Renouvelle-la dans Réglages › Mon compte pour garder tes avantages.`;
+    await notifications.envoyerA(u.id, { titre: 'Tehis', corps: texte, url: '/?panneau=reglages' }).catch(() => {});
+    if (WHATSAPP.canal && u.data?.rappelsWhatsApp) await WHATSAPP.canal.rappel({ user_id: u.id, texte }).catch(() => {});
+    await store.updateUser(u.id, { data: { rappelRenouvellement: u.data.offreJusquau } });
+    n++;
+  }
+  return n;
+}
+setInterval(() => rappelerRenouvellements().catch((e) => console.warn('Renouvellements :', e.message)), 3_600_000).unref();
 app.listen(PORT, () => {
-  console.log(`Tehis prototype sur le port ${PORT} · ${anthropic ? `modèles ${MODELE_FORT} / ${MODELE_LEGER}` : 'MODE DÉMO (pas de clé API)'} · nouveaux comptes : offre ${OFFRE_DEFAUT} · stockage ${store.kind} · voix ${voixIAActive() ? 'OpenAI' : 'du téléphone'} · WhatsApp ${WHATSAPP.actif ? 'actif' : 'non configuré'}${CODE_INVITATION ? '' : " · ATTENTION : inscription ouverte à tous (pas de CODE_INVITATION)"}${ADMIN_TELEPHONE ? '' : ' · ADMIN_TELEPHONE absent : le premier compte créé sera administrateur'}`);
+  console.log(`Tehis prototype sur le port ${PORT} · ${anthropic ? `modèles ${MODELE_FORT} / ${MODELE_LEGER}` : 'MODE DÉMO (pas de clé API)'} · nouveaux comptes : offre ${OFFRE_DEFAUT} · stockage ${store.kind} · voix ${voixIAActive() ? 'OpenAI' : 'du téléphone'} · WhatsApp ${WHATSAPP.actif ? 'actif' : 'non configuré'} · paiement ${PAIEMENT.actif ? `Chariow${PAIEMENT.config.secretPulse ? '' : ' (sans Pulse : CHARIOW_PULSE_SECRET manquant)'}` : 'non configuré'}${CODE_INVITATION ? '' : " · ATTENTION : inscription ouverte à tous (pas de CODE_INVITATION)"}${ADMIN_TELEPHONE ? '' : ' · ADMIN_TELEPHONE absent : le premier compte créé sera administrateur'}`);
 });
 
 export { TYPES_DOCUMENTS };

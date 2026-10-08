@@ -19,6 +19,15 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
+      # Paiement des offres par Chariow (facultatif, voir docs/PAIEMENT.md).
+      - key: CHARIOW_API_KEY
+        sync: false
+      - key: CHARIOW_PULSE_SECRET
+        sync: false
+      - key: CHARIOW_PRODUIT_PLUS
+        sync: false
+      - key: CHARIOW_PRODUIT_PRO
+        sync: false
       # Voix naturelle et transcription (facultatif).
       - key: OPENAI_API_KEY
         sync: false

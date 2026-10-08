@@ -177,7 +177,8 @@
       <div class="reglage col" id="reg-compte">
         <div class="ligne"><div><strong>Mon compte</strong><p class="muted small" id="reg-tel"></p></div>
         <button class="btn small" type="button" id="reg-deconnexion">Me déconnecter</button></div>
-        <div class="ligne"><div><strong>Offre</strong><p class="muted small" id="reg-offre"></p></div></div>
+        <div class="ligne"><div><strong>Offre</strong><p class="muted small" id="reg-offre"></p></div>
+        <button class="btn small accent" type="button" id="reg-offres-btn" hidden>Voir les offres</button></div>
         <div class="quota" id="reg-quota" aria-live="polite"></div>
         <details class="compte-plus">
           <summary>Changer mon code ou supprimer mon compte</summary>
@@ -287,6 +288,27 @@
         <div class="calc-actions"><button class="btn small" type="button" data-aller="2">Retour</button><button class="btn accent" type="button" id="perso-enregistrer">Créer l'agent</button></div>
         <button class="btn small danger" type="button" id="perso-supprimer" hidden>Supprimer cet agent</button>
       </section>
+    </dialog>
+
+    <dialog id="dlg-offres" class="sheet" aria-labelledby="offres-titre">
+      <div class="sheet-head"><h2 id="offres-titre">Choisis ton offre</h2><button type="button" class="icon-btn" data-fermer aria-label="Fermer">✕</button></div>
+      <div id="offres-etape1">
+        <p class="small muted" id="offres-intro">Paiement par Mobile Money (Orange, MTN, Moov, Wave) ou carte, sur la page sécurisée de Chariow. Sans engagement : tu paies un mois quand tu veux.</p>
+        <div class="offres-grille" id="offres-grille"></div>
+      </div>
+      <form id="offres-etape2" class="form-compte" hidden novalidate>
+        <p class="offre-recap" id="offre-recap"></p>
+        <label for="pay-prenom">Prénom</label>
+        <input id="pay-prenom" type="text" autocomplete="given-name" maxlength="50" required>
+        <label for="pay-nom">Nom</label>
+        <input id="pay-nom" type="text" autocomplete="family-name" maxlength="50" required>
+        <label for="pay-email">E-mail (pour ton reçu)</label>
+        <input id="pay-email" type="email" inputmode="email" autocomplete="email" maxlength="255" required>
+        <p class="small muted">Le paiement se fait sur la page de Chariow. Tu reviens ensuite automatiquement dans Tehis.</p>
+        <p id="pay-erreur" class="error" role="alert" hidden></p>
+        <button class="btn primary" type="submit" id="pay-go">Payer avec Mobile Money</button>
+        <button class="lien" type="button" id="pay-retour">Changer d'offre</button>
+      </form>
     </dialog>
 
     <dialog id="dlg-progression" class="sheet" aria-labelledby="prog-titre">

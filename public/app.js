@@ -2,7 +2,7 @@
 import { mountCompanion, ESPECES, HUMEURS } from './companion.js';
 import { cascadeRentabilite, pointMort, fixerPrix, projection12Mois, estimationBFR, EXEMPLES_COURS } from './shared/finance.js';
 import { budgetMensuel, planEpargne, tontine, EXEMPLES_BUDGET } from './shared/budget.js';
-import { AGENTS, GROUPES, NOMS_OFFRES, accesAgent as accesCatalogue, estPerso } from './shared/agents.js';
+import { AGENTS, GROUPES, NOMS_OFFRES, QUOTAS, PRIX, LIMITES_PERSO, accesAgent as accesCatalogue, estPerso } from './shared/agents.js';
 import { initPerso, ouvrirCreation, ouvrirEdition } from './perso.js';
 import { voixDisponible, parler, arreter, debloquer, configurerVoixIA, voixNaturelle } from './voix.js';
 import { markdown, echapper } from './shared/markdown.js';
@@ -152,6 +152,14 @@ async function ouvrirApp() {
   }
   if (etat.progression) etat.compagnon.setAccessoires?.(etat.progression.portes);
   await chargerPersos();
+  chargerOffres().then(() => {
+    const retour = new URLSearchParams(location.search).get('paiement') === 'retour';
+    const enCours = lsGet('tehis_paiement_en_cours', 0);
+    if (retour || (enCours && Date.now() - enCours < 3_600_000)) {
+      if (retour) history.replaceState(null, '', location.pathname);
+      verifierPaiement();
+    }
+  });
   api('/api/progression/visite', { method: 'POST' }).then((p) => majProgression(p)).catch(() => {});
   const memorise = lsGet('tehis_agent', 'compagnon');
   choisirAgent(accesAgent(memorise, etat.profil).ok ? memorise : 'compagnon');
@@ -267,6 +275,7 @@ function carteFicheAgent(id, a, acces) {
   el.querySelector('button').addEventListener('click', () => {
     if (!acces.ok) {
       if (a.developpeur && !etat.profil.developpeur && acces.raison.includes('mode')) { ouvrirDialogueDev(); return; }
+      if (etat.offres?.paiement) { ouvrirOffres(a.offre); return; }
       toast(acces.raison);
       return;
     }
@@ -439,7 +448,7 @@ function grilleDecouverte() {
     b.innerHTML = `${vignetteAgent(id, 'petite')}<span>${echapper(a.nom)}</span>${acces.ok ? '' : `<span class="badge mini">${echapper(NOMS_OFFRES[a.offre])}</span>`}`;
     b.setAttribute('aria-label', `${a.nom} : ${a.resume}${acces.ok ? '' : ` (${acces.raison})`}`);
     b.addEventListener('click', () => {
-      if (!acces.ok) { toast(acces.raison); return; }
+      if (!acces.ok) { if (etat.offres?.paiement && !a.developpeur) ouvrirOffres(a.offre); else toast(acces.raison); return; }
       choisirAgent(id);
     });
     g.appendChild(b);
@@ -673,7 +682,7 @@ async function envoyer(texte, { auto = false, agent = etat.agent } = {}) {
 
   try {
     const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ agent, messages: conversation, position: positionConnue() }) });
-    if (!r.ok || !r.body) { const d = await r.json().catch(() => ({})); throw new Error(d.erreur || `Erreur ${r.status}`); }
+    if (!r.ok || !r.body) { const d = await r.json().catch(() => ({})); throw Object.assign(new Error(d.erreur || `Erreur ${r.status}`), { quota: Boolean(d.quota) }); }
     const lecteur = r.body.getReader();
     const dec = new TextDecoder();
     let tampon = '';
@@ -730,17 +739,25 @@ async function envoyer(texte, { auto = false, agent = etat.agent } = {}) {
     bulle.remove();
     if (items.length === indexUser + 1) { items.splice(indexUser, 1); lsSet(cle, items); bulleUser?.remove(); }
     if (envoisEnAttente[agent] === 'envoi') delete envoisEnAttente[agent];
-    afficherErreur(ex.message, auto ? null : () => { input.value = texte; $('#composer').requestSubmit(); });
+    if (ex.quota) afficherErreur(ex.message, null, etat.offres?.paiement && etat.profil.offre !== 'pro' ? { texte: 'Voir les offres', action: () => ouvrirOffres() } : null);
+    else afficherErreur(ex.message, auto ? null : () => { input.value = texte; $('#composer').requestSubmit(); });
     humeur('repos');
   } finally {
     etat.envoi = false; $('#send').disabled = false;
   }
 }
 
-function afficherErreur(message, reessayer) {
+function afficherErreur(message, reessayer, bouton = null) {
   const n = document.createElement('div');
   n.className = 'msg err';
   n.textContent = message;
+  if (bouton) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn small accent'; b.textContent = bouton.texte;
+    b.onclick = bouton.action;
+    n.appendChild(document.createElement('br'));
+    n.appendChild(b);
+  }
   if (reessayer) {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'lien reessayer'; b.textContent = 'Réessayer';
@@ -885,6 +902,89 @@ function calculer() {
   try { zone.appendChild(carteResultat(def.fn(def.versParams ? def.versParams(p) : p), ctxCartes)); } catch (e) { zone.appendChild(carteResultat({ erreur: e.message })); }
 }
 
+/* ---------- Offres et paiement (Chariow) ---------- */
+const fcfa = (n) => `${new Intl.NumberFormat('fr-FR').format(n)} FCFA`;
+const AVANTAGES = {
+  gratuit: () => [`${QUOTAS.gratuit.messages} messages par jour`, 'Compagnon, Rédaction, Répétiteur, Organisation, Santé', 'Pharmacies de garde et « Autour de moi »', `${LIMITES_PERSO.gratuit.agents} agent personnalisé`],
+  plus: () => [`${QUOTAS.plus.messages} messages par jour`, `${QUOTAS.plus.recherches} recherches sur internet par jour`, 'Agents Vendeur, Emploi et CV, Budget et tontine, Démarches, Logement', 'Réponses du modèle le plus avancé', `${LIMITES_PERSO.plus.agents} agents personnalisés avec tes documents`],
+  pro: () => [`${QUOTAS.pro.messages} messages par jour`, `${QUOTAS.pro.recherches} recherches sur internet par jour`, 'Tout Plus, et Finance entreprise (point mort, prix, prévisionnel, BFR)', 'Mode développeur (GitHub, Render)', `${LIMITES_PERSO.pro.agents} agents personnalisés avec recherche web`]
+};
+const RANG = { gratuit: 0, plus: 1, pro: 2 };
+let offreChoisie = null;
+async function chargerOffres() {
+  try { etat.offres = await api('/api/offres'); } catch { etat.offres = { paiement: false, offres: [] }; }
+  return etat.offres;
+}
+async function ouvrirOffres(miseEnAvant = null) {
+  const o = etat.offres || await chargerOffres();
+  const actuelle = etat.profil.offre || 'gratuit';
+  const grille = $('#offres-grille');
+  grille.innerHTML = '';
+  for (const id of ['gratuit', 'plus', 'pro']) {
+    const payable = o.paiement && o.offres.includes(id);
+    const carte = document.createElement('div');
+    carte.className = `offre-carte${id === actuelle ? ' actuelle' : ''}${id === (miseEnAvant || (actuelle === 'gratuit' ? 'plus' : null)) && id !== actuelle ? ' mise-en-avant' : ''}`;
+    const action = id === actuelle ? (id === 'gratuit' ? '' : `<button type="button" class="btn small accent" data-offre="${id}">Prolonger d'un mois</button>`)
+      : id === 'gratuit' ? '' : payable ? `<button type="button" class="btn ${RANG[id] > RANG[actuelle] ? 'accent' : ''}" data-offre="${id}">${RANG[id] > RANG[actuelle] ? 'Passer' : 'Choisir'} à ${NOMS_OFFRES[id]}</button>` : '<span class="small muted">Bientôt disponible</span>';
+    carte.innerHTML = `${id === actuelle ? '<span class="offre-etiquette">Ton offre</span>' : id === 'plus' && actuelle === 'gratuit' ? '<span class="offre-etiquette">Le plus choisi</span>' : ''}
+      <div class="offre-tete"><strong>${NOMS_OFFRES[id]}</strong><span class="offre-prix">${PRIX[id] ? `${fcfa(PRIX[id])} <small>/ mois</small>` : 'Gratuit'}</span></div>
+      <ul>${AVANTAGES[id]().map((t) => `<li>${echapper(t)}</li>`).join('')}</ul>${action}`;
+    carte.querySelector('[data-offre]')?.addEventListener('click', () => etapePaiement(id));
+    grille.appendChild(carte);
+  }
+  $('#offres-intro').hidden = !o.paiement;
+  $('#offres-etape1').hidden = false; $('#offres-etape2').hidden = true;
+  if (!$('#dlg-offres').open) $('#dlg-offres').showModal();
+}
+function etapePaiement(id) {
+  offreChoisie = id;
+  const prolonge = id === etat.profil.offre;
+  $('#offre-recap').innerHTML = `<strong>${NOMS_OFFRES[id]}</strong> · ${fcfa(PRIX[id])} pour ${etat.offres?.dureeJours || 30} jours${prolonge ? ', ajoutés à ta date de fin actuelle' : ''}.`;
+  $('#pay-prenom').value = etat.profil.prenom || '';
+  $('#pay-nom').value = etat.profil.nomFamille || '';
+  $('#pay-email').value = etat.profil.email || '';
+  $('#pay-erreur').hidden = true;
+  $('#offres-etape1').hidden = true; $('#offres-etape2').hidden = false;
+  ($('#pay-nom').value ? $('#pay-email') : $('#pay-nom')).focus();
+}
+$('#pay-retour').addEventListener('click', () => { $('#offres-etape1').hidden = false; $('#offres-etape2').hidden = true; });
+$('#offres-etape2').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = $('#pay-erreur'); err.hidden = true;
+  const b = $('#pay-go'); b.disabled = true; b.textContent = 'Ouverture du paiement…';
+  try {
+    const r = await api('/api/paiement', { method: 'POST', body: JSON.stringify({ offre: offreChoisie, prenom: $('#pay-prenom').value, nom: $('#pay-nom').value, email: $('#pay-email').value }) });
+    if (r.termine) { fermerDialogues(); await verifierPaiement(); return; }
+    lsSet('tehis_paiement_en_cours', Date.now());
+    location.href = r.url;
+  } catch (ex) { err.textContent = ex.message; err.hidden = false; b.disabled = false; b.textContent = 'Payer avec Mobile Money'; }
+});
+$('#reg-offres-btn').addEventListener('click', () => ouvrirOffres());
+
+/** Retour de la page Chariow (ou app rouverte après paiement) : on vérifie, plusieurs fois si besoin. */
+async function verifierPaiement() {
+  const avant = etat.profil.offre;
+  toast('Vérification de ton paiement…', 3000);
+  for (let essai = 0; essai < 6; essai++) {
+    try {
+      const r = await api('/api/paiement/verifier', { method: 'POST' });
+      if (r.statut === 'completed' || (r.offre && r.offre !== avant)) {
+        etat.profil = await api('/api/profile');
+        await chargerPersos();
+        humeur('fete');
+        toast(`Merci ! Ton offre ${NOMS_OFFRES[r.offre]} est active jusqu'au ${new Date(r.offreJusquau).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}.`, 6000);
+        try { localStorage.removeItem('tehis_paiement_en_cours'); } catch { /* rien */ }
+        if (!$('#panel-reglages').hidden) afficherReglages();
+        return true;
+      }
+      if (r.statut === 'failed' || r.statut === 'abandoned') { toast("Le paiement n'a pas abouti. Tu n'as pas été débité ; tu peux réessayer depuis Réglages.", 6000); try { localStorage.removeItem('tehis_paiement_en_cours'); } catch { /* rien */ } return false; }
+    } catch { /* réseau : on réessaie */ }
+    await new Promise((res) => setTimeout(res, 4000));
+  }
+  toast('Paiement pas encore confirmé. Il sera activé automatiquement dès que Chariow le confirme.', 6000);
+  return false;
+}
+
 /* ---------- Le compagnon qui grandit ---------- */
 const nomCompagnon = () => etat.profil.nomCompagnon || 'Kiki';
 function majProgression(p) {
@@ -1010,7 +1110,13 @@ async function afficherReglages() {
   const esp = ESPECES.find((e) => e.id === etat.profil.espece)?.nom || 'Chat';
   $('#reg-compagnon').textContent = `${etat.profil.nomCompagnon || 'Kiki'}, ${esp.toLowerCase()}`;
   $('#reg-offre').textContent = `${NOMS_OFFRES[etat.profil.offre] || 'Gratuit'}${etat.profil.role === 'admin' ? ' · administrateur' : ''}`;
-  api('/api/compte').then((c) => { $('#reg-tel').textContent = c.telephone; majQuota(c.quota); }).catch(() => {});
+  $('#reg-offres-btn').hidden = !etat.offres?.paiement || etat.profil.role === 'admin';
+  $('#reg-offres-btn').textContent = etat.profil.offre === 'gratuit' ? 'Voir les offres' : 'Gérer';
+  api('/api/compte').then((c) => {
+    $('#reg-tel').textContent = c.telephone; majQuota(c.quota);
+    if (c.offreJusquau) $('#reg-offre').textContent = `${NOMS_OFFRES[c.offre]} · jusqu'au ${new Date(c.offreJusquau).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+    else if (c.offreExpiree && c.offre === 'gratuit') $('#reg-offre').textContent = `Gratuit · ton offre ${NOMS_OFFRES[c.offreExpiree]} est terminée`;
+  }).catch(() => {});
   const wa = etat.statut.whatsapp;
   $('#reg-whatsapp').hidden = !wa;
   if (wa) {

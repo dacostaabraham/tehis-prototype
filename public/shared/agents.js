@@ -12,6 +12,9 @@ export const QUOTAS = {
   pro: { messages: 300, recherches: 40, modeleFort: true }
 };
 
+// Prix mensuels affichés dans l'app (le montant payé est celui du produit Chariow : garder les deux identiques).
+export const PRIX = { gratuit: 0, plus: 2500, pro: 10000 };
+
 export const GROUPES = [
   { id: 'base', nom: 'Ton compagnon' },
   { id: 'travail', nom: 'Travail et argent' },
