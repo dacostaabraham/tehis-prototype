@@ -107,6 +107,8 @@ export function creerPaiement({ store, fetchImpl = fetch, config = configPaiemen
   async function pulse(evenement) {
     const s = evenement?.sale;
     if (!s?.id) return { ignore: 'pas de vente' };
+    // « Send test pulse » de Chariow : fausse vente (test_sale_…, téléphone 1234567890), rien à appliquer.
+    if (String(s.id).startsWith('test_') || evenement.note) return { test: true };
     const statut = evenement.event === 'successful.sale' ? 'completed' : evenement.event === 'failed.sale' ? 'failed' : evenement.event === 'abandoned.sale' ? 'abandoned' : s.status;
     return appliquerVente({ vente: s.id, statut, compteId: s.custom_metadata?.compte, produit: evenement.product?.id, telephoneClient: evenement.customer?.phone, montant: s.amount?.value });
   }

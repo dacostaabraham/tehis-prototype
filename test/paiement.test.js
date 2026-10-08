@@ -74,6 +74,14 @@ test('Achat direct sur la boutique (sans métadonnées) : compte retrouvé par l
   assert.deepEqual(await p.pulse({ event: 'successful.sale', sale: { id: 'sal_e' }, product: { id: 'prd_pro' }, customer: { phone: '+2259999999999' } }), { ignore: 'compte introuvable' });
 });
 
+test('Pulse de test Chariow (test_sale_…) : reconnu, aucune offre ni alerte', async () => {
+  const { store, u, p } = await preparer();
+  const r = await p.pulse({ event: 'successful.sale', sale: { id: 'test_sale_98kmff1cqqjw' }, product: { id: 'prd_plus' }, customer: { phone: '1234567890' } });
+  assert.deepEqual(r, { test: true });
+  assert.equal(await store.getPaiement('test_sale_98kmff1cqqjw'), null);
+  assert.equal((await store.getUser(u.id)).offre, 'gratuit');
+});
+
 test('Échec ou abandon : rien n\'est activé ; produit inconnu signalé', async () => {
   const { store, u, p } = await preparer();
   await p.pulse({ event: 'failed.sale', sale: { id: 'sal_f', custom_metadata: { compte: u.id } }, product: { id: 'prd_plus' } });

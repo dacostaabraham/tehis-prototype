@@ -173,9 +173,9 @@ app.post('/webhook/chariow', async (req, res) => {
   if (livraison && livraisonsVues.has(livraison)) return res.status(200).send('OK');
   let corps;
   try { corps = JSON.parse(req.body.toString('utf8')); } catch { return res.status(400).send('JSON invalide'); }
-  if (corps.note && !livraison) { console.log('[PAIEMENT] Pulse de test reçu et vérifié'); return res.status(200).send('OK'); }
   try {
     const r = await PAIEMENT.service.pulse(corps);
+    if (r.test) { console.log(`[PAIEMENT] Pulse de test reçu et vérifié (${corps.event || 'test'})`); return res.status(200).send('OK'); }
     if (livraison) { livraisonsVues.add(livraison); if (livraisonsVues.size > 5000) livraisonsVues.clear(); }
     console.log(`[PAIEMENT] Pulse ${corps.event} ${corps.sale?.id || ''} → ${JSON.stringify(r)}`);
     res.status(200).send('OK');
