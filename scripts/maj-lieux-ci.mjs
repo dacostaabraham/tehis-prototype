@@ -70,7 +70,9 @@ export function compacter(elements, genere = new Date().toISOString().slice(0, 1
   for (const e of elements) {
     const t = e.tags || {};
     const lat = e.lat ?? e.center?.lat, lng = e.lon ?? e.center?.lon;
-    const nom = (t.name || t['name:fr'] || '').trim();
+    // Les distributeurs n'ont souvent pas de nom dans OSM, seulement leur banque.
+    const banque = (t.brand || t.operator || '').trim();
+    const nom = (t.name || t['name:fr'] || (t.amenity === 'atm' ? (banque ? `Distributeur ${banque}` : 'Distributeur de billets') : '')).trim();
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || !nom) continue;
     const osm = `${e.type}/${e.id}`;
     if (vus.has(osm)) continue;
