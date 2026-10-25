@@ -16,6 +16,7 @@ const PAR_COMPTE = new Set([
   'addReminder', 'listReminders', 'deleteReminder', 'updateReminder',
   'getList', 'getListById', 'saveList', 'listLists', 'deleteList',
   'addAction', 'getAction', 'updateAction', 'getSecret', 'setSecret',
+  'addVente', 'listVentes', 'getVente', 'updateVente', 'deleteVente',
   'listCustomAgents', 'getCustomAgent', 'saveCustomAgent', 'deleteCustomAgent',
   'incrementUsage', 'getUsage', 'addSubscription', 'listSubscriptions',
   'getConversation', 'saveConversation', 'deleteConversations', 'getProgression', 'saveProgression',
@@ -39,7 +40,7 @@ const publicUser = (u) => u && Object.fromEntries(PUBLIC.map((k) => [k, u[k]]));
 class MemoryStore {
   constructor() {
     this.users = []; this.memories = []; this.documents = []; this.reminders = []; this.lists = [];
-    this.actions = []; this.secrets = new Map(); this.subs = new Map();
+    this.actions = []; this.ventes = []; this.secrets = new Map(); this.subs = new Map();
     this.persos = []; this.usage = new Map(); this.conversations = new Map();
   }
   async init() {}
@@ -64,7 +65,7 @@ class MemoryStore {
   }
   async listUsers() { return [...this.users].sort(tri('created_at', 1)).map(publicUser); }
   async deleteUser(id) {
-    for (const k of ['memories', 'documents', 'reminders', 'lists', 'actions', 'persos']) this[k] = this[k].filter((x) => x.user_id !== id);
+    for (const k of ['memories', 'documents', 'reminders', 'lists', 'actions', 'ventes', 'persos']) this[k] = this[k].filter((x) => x.user_id !== id);
     for (const [e, s] of this.subs) if (s.user_id === id) this.subs.delete(e);
     for (const k of [...this.conversations.keys()]) if (k.startsWith(`${id}|`)) this.conversations.delete(k);
     for (const k of [...this.secrets.keys()]) if (k.startsWith(`u:${id}:`)) this.secrets.delete(k);
@@ -72,7 +73,7 @@ class MemoryStore {
   }
   /** Données de l'ancien prototype (sans compte) rattachées au compte administrateur. */
   async rattacherAnciennesDonnees(uid) {
-    for (const k of ['memories', 'documents', 'reminders', 'lists', 'actions', 'persos']) this[k].forEach((x) => { x.user_id ??= uid; });
+    for (const k of ['memories', 'documents', 'reminders', 'lists', 'actions', 'ventes', 'persos']) this[k].forEach((x) => { x.user_id ??= uid; });
     for (const s of this.subs.values()) s.user_id ??= uid;
   }
 
@@ -114,6 +115,20 @@ class MemoryStore {
   async addAction(uid, a) { const x = { id: randomUUID(), user_id: uid, statut: 'en_attente', resultat: null, ...a, created_at: new Date().toISOString() }; this.actions.push(x); return x; }
   async getAction(uid, id) { return this.actions.find((a) => a.id === id && a.user_id === uid) || null; }
   async updateAction(uid, id, champs) { const a = await this.getAction(uid, id); if (a) Object.assign(a, champs); return a; }
+
+  /* Ventes suivies par l'agent Vendeur en ligne (V1 « Vendeur qui agit »). */
+  async addVente(uid, v) {
+    const x = { id: randomUUID(), user_id: uid, envoye: false, envoye_le: null, prix: null, ...v, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    this.ventes.push(x); return x;
+  }
+  async listVentes(uid) { return this.#a(this.ventes, uid).sort(tri('created_at')); }
+  async getVente(uid, id) { return this.ventes.find((v) => v.id === id && v.user_id === uid) || null; }
+  async updateVente(uid, id, champs) {
+    const v = await this.getVente(uid, id);
+    if (v) Object.assign(v, champs, { updated_at: new Date().toISOString() });
+    return v || null;
+  }
+  async deleteVente(uid, id) { this.ventes = this.ventes.filter((v) => !(v.id === id && v.user_id === uid)); }
 
   /* Secrets : ceux d'un compte (clés GitHub, Render) et ceux du serveur (clés VAPID). */
   async getSecret(uid, nom) { return this.secrets.get(cleSecret(uid, nom)) ?? null; }
@@ -162,7 +177,7 @@ class MemoryStore {
   async dernierPaiementEnAttente(uid) { return (await this.listPaiements(uid)).find((p) => p.statut === 'en_attente') || null; }
 }
 
-const TABLES_COMPTE = ['memories', 'documents', 'reminders', 'lists', 'actions', 'push_subscriptions', 'custom_agents'];
+const TABLES_COMPTE = ['memories', 'documents', 'reminders', 'lists', 'actions', 'ventes', 'push_subscriptions', 'custom_agents'];
 
 class PgStore {
   constructor(url) {
@@ -179,6 +194,8 @@ class PgStore {
       create table if not exists reminders (id uuid primary key, texte text not null, quand timestamptz not null, repetition text not null default 'aucune', envoye boolean not null default false, created_at timestamptz not null default now());
       create table if not exists lists (id uuid primary key, nom text not null, titre text not null, items jsonb not null default '[]'::jsonb, updated_at timestamptz not null default now());
       create table if not exists actions (id uuid primary key, outil text not null, input jsonb not null, resume text not null, statut text not null, resultat jsonb, created_at timestamptz not null default now());
+      create table if not exists ventes (id uuid primary key, user_id uuid, client_nom text not null, client_telephone text not null, produit text not null, prix numeric, statut text not null default 'interesse', envoye boolean not null default false, envoye_le timestamptz, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+      create index if not exists ventes_user on ventes (user_id);
       create table if not exists secrets (nom text primary key, valeur text not null);
       create table if not exists push_subscriptions (endpoint text primary key, data jsonb not null);
       create table if not exists custom_agents (id uuid primary key, data jsonb not null, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
@@ -263,6 +280,22 @@ class PgStore {
   async addAction(uid, { outil, input, resume }) { return (await this.q("insert into actions (id, user_id, outil, input, resume, statut) values ($1,$2,$3,$4,$5,'en_attente') returning *", [randomUUID(), uid, outil, JSON.stringify(input), resume])).rows[0]; }
   async getAction(uid, id) { return (await this.q('select * from actions where id = $1 and user_id = $2', [id, uid])).rows[0] || null; }
   async updateAction(uid, id, { statut, resultat }) { return (await this.q('update actions set statut = $3, resultat = $4 where id = $1 and user_id = $2 returning *', [id, uid, statut, JSON.stringify(resultat ?? null)])).rows[0]; }
+
+  /* Ventes suivies par l'agent Vendeur en ligne (V1 « Vendeur qui agit »). */
+  #vente(r) { return r && { ...r, prix: r.prix === null || r.prix === undefined ? null : Number(r.prix), created_at: new Date(r.created_at).toISOString(), updated_at: new Date(r.updated_at).toISOString(), envoye_le: r.envoye_le ? new Date(r.envoye_le).toISOString() : null }; }
+  async addVente(uid, { client_nom, client_telephone, produit, prix = null, statut = 'interesse' }) {
+    return this.#vente((await this.q('insert into ventes (id, user_id, client_nom, client_telephone, produit, prix, statut) values ($1,$2,$3,$4,$5,$6,$7) returning *', [randomUUID(), uid, client_nom, client_telephone, produit, prix, statut])).rows[0]);
+  }
+  async listVentes(uid) { return (await this.q('select * from ventes where user_id = $1 order by created_at desc limit 200', [uid])).rows.map((r) => this.#vente(r)); }
+  async getVente(uid, id) { return this.#vente((await this.q('select * from ventes where id = $1 and user_id = $2', [id, uid])).rows[0]); }
+  async updateVente(uid, id, champs) {
+    const autorises = ['client_nom', 'client_telephone', 'produit', 'prix', 'statut', 'envoye', 'envoye_le'];
+    const cles = Object.keys(champs).filter((k) => autorises.includes(k));
+    if (!cles.length) return this.getVente(uid, id);
+    const sets = cles.map((k, i) => `${k} = $${i + 3}`);
+    return this.#vente((await this.q(`update ventes set ${sets.join(', ')}, updated_at = now() where id = $1 and user_id = $2 returning *`, [id, uid, ...cles.map((k) => champs[k])])).rows[0]);
+  }
+  async deleteVente(uid, id) { await this.q('delete from ventes where id = $1 and user_id = $2', [id, uid]); }
 
   async getSecret(uid, nom) { return this.getSecretServeur(cleSecret(uid, nom)); }
   async setSecret(uid, nom, valeur) { return this.setSecretServeur(cleSecret(uid, nom), valeur); }

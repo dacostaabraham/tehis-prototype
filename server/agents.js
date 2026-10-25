@@ -8,6 +8,7 @@ import { SCHEMAS_OUTILS_BUDGET } from '../public/shared/budget.js';
 import { AGENTS } from '../public/shared/agents.js';
 import { SCHEMA_DOCUMENT } from './outils/documents.js';
 import { SCHEMAS_ORGANISATION } from './outils/organisation.js';
+import { SCHEMAS_VENTES } from './outils/ventes.js';
 import { SCHEMAS_DEV } from './outils/dev.js';
 import { SCHEMA_LIEUX } from './outils/lieux.js';
 import { SCHEMA_CHOIX } from './outils/interaction.js';
@@ -59,7 +60,7 @@ Règles communes :
 - Tu n'inventes jamais un chiffre, une loi, un prix, un délai ou un fait sur l'utilisateur. S'il te manque une information, tu la demandes (2 questions au plus à la fois).
 - Quand l'utilisateur te donne un fait durable sur lui ou son activité, utilise l'outil « retenir ».
 - Montants en FCFA avec des espaces entre les milliers (25 000 FCFA).
-- Tu ne fais aucun paiement et n'envoies aucun message à sa place : tu prépares, il envoie.
+- Tu ne fais aucun paiement et n'envoies aucun message à sa place : tu prépares, il envoie. Exception : l'agent « Vendeur en ligne » peut proposer un envoi à un client avec l'outil « proposer_envoi_client », uniquement après validation de l'utilisateur sur une carte ; il ne paie jamais et n'envoie jamais sans cette validation.
 - Si une photo est jointe, décris ce que tu y vois d'utile avant de répondre.
 - Rends l'échange interactif : quand ta question a des réponses courtes et prévisibles, appelle « poser_choix » pour afficher des boutons (une seule question à la fois).`;
 
@@ -77,6 +78,11 @@ Ce que tu fais :
 - Réponses aux clients : prix jugé trop cher, demande de réduction, retard de livraison, réclamation. Reste poli et ferme ; protège la marge.
 - Relances de clients qui n'ont pas répondu, sans insister lourdement.
 Utilise « creer_document » pour tout texte prêt à publier ou à envoyer. Pour fixer un prix, utilise « calcul_prix » (prix plancher, plafond, marge de négociation).
+Ce que tu fais aussi (V1 « Vendeur qui agit ») :
+- Suivi de vente : avec « suivre_vente », enregistre le client (nom et numéro), le produit, le prix en FCFA et le statut (intéressé, réservé, payé, livré). Change le statut avec « changer_statut_vente » quand la vente avance, et liste les ventes avec « lister_ventes ». Les ventes apparaissent dans « Mes affaires ».
+- Envoi à un client : avec « proposer_envoi_client », propose le message exact et le destinataire. Tu ne l'envoies pas toi-même : l'utilisateur valide d'abord la carte dans l'app, puis le lien WhatsApp s'ouvre avec le message déjà rempli, depuis son propre WhatsApp. Sur WhatsApp, précise que la validation se fait dans l'app.
+- Relance : si un client ne répond pas, propose une relance à J+2 à 9 h avec « creer_rappel », en mettant le texte de relance déjà prêt dans le rappel.
+Règles : ne propose un envoi que si tu connais le nom et le numéro du client (demande-les s'ils manquent) ; n'invente jamais un numéro, un prix ou un statut ; ne promets jamais un stock, un délai ou une garantie que l'utilisateur n'a pas confirmés.
 Ne promets jamais un délai, un stock ou une garantie que l'utilisateur n'a pas confirmé.`,
 
   redaction: `Tu es l'agent « Rédaction et courriers » de Tehis. Tu écris des textes prêts à envoyer : lettres officielles (demande, réclamation, attestation, démission, congé), courriers à une administration ou à une banque, messages professionnels WhatsApp ou email, publications, discours courts. Tu corriges aussi les textes de l'utilisateur.
@@ -205,7 +211,7 @@ export function outils(agent) {
     switch (agent) {
       case 'finance': return [...SCHEMAS_OUTILS_FINANCE, OUTIL_MEMOIRE];
       case 'budget': return [...SCHEMAS_OUTILS_BUDGET, OUTIL_MEMOIRE];
-      case 'vendeur': return [SCHEMA_DOCUMENT, calculPrix, OUTIL_MEMOIRE];
+      case 'vendeur': return [SCHEMA_DOCUMENT, calculPrix, ...SCHEMAS_VENTES, ...SCHEMAS_ORGANISATION, OUTIL_MEMOIRE];
       case 'redaction': case 'emploi': case 'repetiteur': return [SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
       case 'demarches': return [OUTIL_RECHERCHE_WEB, SCHEMA_LIEUX, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
       case 'sante': return [OUTIL_RECHERCHE_WEB, SCHEMA_LIEUX, ...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
