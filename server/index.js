@@ -19,6 +19,7 @@ import { creerCoffre } from './coffre.js';
 import { initNotifications } from './notifications.js';
 import { creerDocument, TYPES_DOCUMENTS } from './outils/documents.js';
 import { executerOrganisation } from './outils/organisation.js';
+import { preparerEnvoiClient, executerVente, executerEnvoiValide, STATUTS_VENTE } from './outils/ventes.js';
 import { chercherLieux, positionValide } from './outils/lieux.js';
 import { preparerChoix } from './outils/interaction.js';
 import { executerDev, preparerAction, OUTILS_A_VALIDER, SCHEMAS_DEV } from './outils/dev.js';
@@ -344,6 +345,15 @@ app.patch('/api/lists/:id/items/:item', async (req, res) => {
 });
 app.delete('/api/lists/:id', async (req, res) => { await req.store.deleteList(req.params.id); res.json({ ok: true }); });
 
+/* ---------- Ventes suivies (agent Vendeur en ligne) ---------- */
+app.get('/api/ventes', async (req, res) => res.json(await req.store.listVentes()));
+app.patch('/api/ventes/:id', async (req, res) => {
+  if (!STATUTS_VENTE.includes(req.body?.statut)) return res.status(400).json({ erreur: 'Statut inconnu : intéressé, réservé, payé ou livré.' });
+  const v = await req.store.updateVente(req.params.id, { statut: req.body.statut });
+  return v ? res.json(v) : res.status(404).json({ erreur: 'Vente introuvable.' });
+});
+app.delete('/api/ventes/:id', async (req, res) => { await req.store.deleteVente(req.params.id); res.json({ ok: true }); });
+
 /* ---------- Notifications ---------- */
 let notifications = null;
 app.get('/api/push/key', (_req, res) => res.json({ cle: notifications?.clePublique || null }));
@@ -394,10 +404,23 @@ app.post('/api/actions/:id', async (req, res) => {
   const action = await req.store.getAction(req.params.id);
   if (!action) return res.status(404).json({ erreur: 'Action introuvable.' });
   if (action.statut !== 'en_attente') return res.status(409).json({ erreur: 'Cette action a déjà été traitée.', statut: action.statut });
-  if (!accesAgent('dev', profil(req)).ok) return res.status(403).json({ erreur: 'Mode développeur non disponible.' });
+  // Même circuit de validation pour le mode développeur et pour le Vendeur :
+  // une action en attente ne s'exécute que sur « Valider ».
+  const estVendeur = action.outil === 'vendeur_envoyer_message';
+  if (estVendeur) {
+    if (!accesAgent('vendeur', profil(req)).ok) return res.status(403).json({ erreur: 'Agent Vendeur en ligne non disponible avec ton offre.' });
+  } else if (!accesAgent('dev', profil(req)).ok) return res.status(403).json({ erreur: 'Mode développeur non disponible.' });
   if (req.body?.decision !== 'valider') {
     await req.store.updateAction(action.id, { statut: 'refusee', resultat: null });
     return res.json({ statut: 'refusee' });
+  }
+  if (estVendeur) {
+    // Aucun envoi réseau ici : on marque la vente comme envoyée et on renvoie
+    // le lien WhatsApp, que l'app ouvre avec le message déjà rempli.
+    const resultat = await executerEnvoiValide(req.store, action);
+    const statut = resultat.erreur ? 'echec' : 'executee';
+    await req.store.updateAction(action.id, { statut, resultat });
+    return res.json({ statut, resultat });
   }
   const input = typeof action.input === 'string' ? JSON.parse(action.input) : action.input;
   const resultat = await executerDev(action.outil, input, await clesDev(req));
@@ -675,6 +698,24 @@ async function executerOutil(agent, nom, input = {}, ctx = {}) {
     return { resultat: { affiche: true }, evenement: ['suggestion', { agent: input.agent, raison: String(input.raison || '').slice(0, 200) }] };
   }
   if (nom === 'proposer_mode_developpeur') return { resultat: { affiche: true }, evenement: ['devoffer', {}] };
+  // Vendeur en ligne (V1 « Vendeur qui agit ») : suivi de vente et envoi à un client.
+  // L'envoi attend la validation de l'utilisateur sur une carte (même circuit
+  // que le mode développeur) : rien ne part sans son « Valider ».
+  if (nom === 'proposer_envoi_client') {
+    if (agent !== 'vendeur') return { resultat: { erreur: 'Cet outil est réservé à l’agent Vendeur en ligne.' } };
+    const p = preparerEnvoiClient(input);
+    if (p.erreur) return { resultat: p };
+    const a = await ctx.store.addAction({ outil: 'vendeur_envoyer_message', input, resume: p.resume });
+    return {
+      resultat: { statut: 'en_attente_de_validation', actionId: a.id, consigne: "L'action n'est PAS encore faite. Demande à l'utilisateur de vérifier la carte dans l'app et d'appuyer sur Valider : le lien WhatsApp s'ouvrira ensuite avec le message déjà rempli." },
+      evenement: ['approval', { id: a.id, agent: 'vendeur', titre: 'Vendeur en ligne — envoi à valider', outil: 'vendeur_envoyer_message', resume: p.resume, details: p.details, fichiers: null }]
+    };
+  }
+  if (['suivre_vente', 'lister_ventes', 'changer_statut_vente'].includes(nom)) {
+    if (agent !== 'vendeur') return { resultat: { erreur: 'Cet outil est réservé à l’agent Vendeur en ligne.' } };
+    const r = await executerVente(ctx.store, nom, input);
+    return { resultat: r, evenement: r.type && !r.erreur ? ['tool', { name: nom, input, result: r }] : null };
+  }
   if (NOMS_OUTILS_DEV.has(nom)) {
     if (agent !== 'dev') return { resultat: { erreur: 'Outil réservé au mode développeur.' } };
     if (OUTILS_A_VALIDER.has(nom)) {

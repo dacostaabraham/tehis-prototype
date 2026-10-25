@@ -13,7 +13,7 @@ Compagnon IA en 3D avec des **agents du quotidien** pour la Côte d'Ivoire, et u
 | Agent | Ce qu'il fait | Offre | Modèle |
 | --- | --- | --- | --- |
 | Compagnon | Discuter, orienter vers le bon agent, proposer le mode développeur | Gratuit | léger |
-| Vendeur en ligne | Fiches produits (photo à l'appui), légendes, réponses clients, relances, prix | Plus | léger |
+| Vendeur en ligne | Fiches produits (photo à l'appui), légendes, réponses clients, relances, prix ; suivi des ventes (statuts) dans « Mes affaires », envoi WhatsApp au client après validation sur une carte, relance à J+2 | Plus | léger |
 | Rédaction et courriers | Lettres officielles, réclamations, messages, corrections | Gratuit | léger |
 | Emploi et CV | CV, lettre de motivation, entraînement à l'entretien | Plus | léger |
 | Budget et tontine | Budget du mois, plan d'épargne, tontine (calculs exacts) | Plus | léger |

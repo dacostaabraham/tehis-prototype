@@ -16,9 +16,12 @@ function kv(lignes) {
 }
 const TITRES = {
   cascade: 'Cascade de rentabilité', point_mort: 'Point mort', prix: 'Fixer mon prix', projection: 'Prévisionnel mois par mois', bfr: 'Besoin en fonds de roulement',
-  budget: 'Budget du mois', epargne: "Plan d'épargne", tontine: 'Tontine', rappel: 'Rappel programmé', rappels: 'Rappels à venir', liste: 'Liste', listes: 'Mes listes'
+  budget: 'Budget du mois', epargne: "Plan d'épargne", tontine: 'Tontine', rappel: 'Rappel programmé', rappels: 'Rappels à venir', liste: 'Liste', listes: 'Mes listes',
+  vente: 'Vente suivie', ventes: 'Ventes suivies'
 };
-const ETIQUETTE = { rappel: 'enregistré', rappels: '', liste: 'enregistrée', listes: '' };
+const ETIQUETTE = { rappel: 'enregistré', rappels: '', liste: 'enregistrée', listes: '', vente: 'enregistrée', ventes: '' };
+/** Statuts d'une vente suivie (agent Vendeur en ligne). */
+export const STATUTS_VENTE = { interesse: 'Intéressé', reserve: 'Réservé', paye: 'Payé', livre: 'Livré' };
 
 function carte(titre, sousTitre = 'calcul exact') {
   const el = document.createElement('div');
@@ -154,6 +157,21 @@ export function carteResultat(r, ctx = {}) {
     if (r.type === 'liste') el.querySelector('.result-title').textContent = r.titre;
   }
 
+  if (r.type === 'vente') {
+    corps = kv([
+      ['Client', echapper(r.client_nom)],
+      ['Numéro', echapper(r.client_telephone)],
+      ['Produit', echapper(r.produit)],
+      r.prix !== null && r.prix !== undefined ? ['Prix', fcfa(r.prix), true] : null,
+      ['Statut', echapper(STATUTS_VENTE[r.statut] || r.statut), true],
+      ['Message envoyé', r.envoye ? `Oui${r.envoye_le ? ` · ${echapper(dateFr(r.envoye_le))}` : ''}` : 'Non']
+    ]);
+  }
+
+  if (r.type === 'ventes') {
+    corps = r.ventes.length ? `<ul class="simple">${r.ventes.map((v) => `<li><strong>${echapper(v.client_nom)}</strong> — ${echapper(v.produit)}${v.prix !== null && v.prix !== undefined ? ` · ${fcfa(v.prix)}` : ''}<br><span class="muted small">${echapper(STATUTS_VENTE[v.statut] || v.statut)}${v.envoye ? ' · message envoyé' : ''} · ${echapper(new Date(v.created_at).toLocaleDateString('fr-FR'))}</span></li>`).join('')}</ul>` : '<p class="muted">Aucune vente suivie pour l\'instant.</p>';
+  }
+
   el.insertAdjacentHTML('beforeend', corps);
   requestAnimationFrame(() => { const c = el.querySelector('canvas'); apres.forEach((f) => f(c)); });
   return el;
@@ -224,7 +242,7 @@ export function carteValidation(item, ctx) {
   const rendu = () => {
     const resultat = item.resultat;
     const lien = resultat?.url ? `<a href="${echapper(resultat.url)}" target="_blank" rel="noopener">Ouvrir</a>` : '';
-    el.innerHTML = `<div class="result-head"><span class="result-title">Mode développeur</span><span class="statut s-${item.statut}">${STATUTS[item.statut]}</span></div>
+    el.innerHTML = `<div class="result-head"><span class="result-title">${echapper(a.titre || 'Mode développeur')}</span><span class="statut s-${item.statut}">${STATUTS[item.statut]}</span></div>
       <strong>${echapper(a.resume)}</strong>
       ${a.details?.length ? `<ul class="simple small">${a.details.map((d) => `<li>${echapper(d)}</li>`).join('')}</ul>` : ''}
       ${fichiers}
@@ -241,6 +259,11 @@ export function carteValidation(item, ctx) {
       item.statut = r.statut; item.resultat = r.resultat || null;
     } catch (e) { item.statut = 'echec'; item.resultat = { erreur: e.message }; }
     rendu();
+    // Envoi client validé : on ouvre le WhatsApp du vendeur avec le message
+    // déjà rempli (le lien « Ouvrir » reste visible si le navigateur bloque).
+    if (item.statut === 'executee' && a.outil === 'vendeur_envoyer_message' && item.resultat?.url) {
+      try { window.open(item.resultat.url, '_blank', 'noopener'); } catch { /* le lien Ouvrir reste disponible */ }
+    }
     ctx.sauver?.();
     ctx.apresDecision?.(item);
   }

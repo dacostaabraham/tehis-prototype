@@ -6,7 +6,7 @@ import { AGENTS, GROUPES, NOMS_OFFRES, QUOTAS, PRIX, LIMITES_PERSO, accesAgent a
 import { initPerso, ouvrirCreation, ouvrirEdition } from './perso.js';
 import { voixDisponible, parler, arreter, debloquer, configurerVoixIA, voixNaturelle } from './voix.js';
 import { markdown, echapper } from './shared/markdown.js';
-import { carteResultat, carteDocument, carteSuggestion, carteOffreDev, carteValidation, noteActivite, blocSources, blocListe, brancherListes, actionsDocument, dateFr } from './cards.js';
+import { carteResultat, carteDocument, carteSuggestion, carteOffreDev, carteValidation, noteActivite, blocSources, blocListe, brancherListes, actionsDocument, dateFr, STATUTS_VENTE } from './cards.js';
 import { toast } from './shared/ui.js';
 import { ACCESSOIRES, GAINS } from './shared/progression.js';
 import { carteLieux, cartePosition, carteChoix, barreProximite, obtenirPosition, positionConnue } from './lieux.js';
@@ -420,7 +420,7 @@ function rendreItem(it, items) {
   else if (it.type === 'document') zone.appendChild(carteDocument(it.doc));
   else if (it.type === 'suggestion') zone.appendChild(carteSuggestion(it.data, ctxCartes));
   else if (it.type === 'devoffer') zone.appendChild(carteOffreDev(ctxCartes));
-  else if (it.type === 'approval') zone.appendChild(carteValidation(it, { ...ctxCartes, sauver: () => sauverHisto('dev', items), apresDecision: suiteValidation }));
+  else if (it.type === 'approval') zone.appendChild(carteValidation(it, { ...ctxCartes, sauver: () => sauverHisto(it.action?.agent || 'dev', items), apresDecision: suiteValidation }));
   else if (it.type === 'activite') zone.appendChild(noteActivite(it.texte));
   else if (it.type === 'sources') zone.appendChild(blocSources(it.sources));
   else if (it.type === 'memory') { const n = noteActivite(`Retenu : ${it.fait}`); zone.appendChild(n); }
@@ -769,12 +769,13 @@ function afficherErreur(message, reessayer, bouton = null) {
   $('#messages').scrollTop = $('#messages').scrollHeight;
 }
 
-/* Après une validation dans le mode développeur, l'agent reprend avec le résultat. */
+/* Après une validation (mode développeur ou Vendeur), l'agent concerné reprend avec le résultat. */
 function suiteValidation(item) {
   const a = item.action;
-  if (item.statut === 'refusee') return envoyer(`[Action refusée] ${a.resume}. Ne la refais pas sans me demander.`, { auto: true, agent: 'dev' });
+  const agent = a.agent || 'dev';
+  if (item.statut === 'refusee') return envoyer(`[Action refusée] ${a.resume}. Ne la refais pas sans me demander.`, { auto: true, agent });
   const resultat = JSON.stringify(item.resultat || {}).slice(0, 3000);
-  envoyer(`[Action ${item.statut === 'executee' ? 'validée' : 'en échec'}] ${a.resume}\nRésultat : ${resultat}`, { auto: true, agent: 'dev' });
+  envoyer(`[Action ${item.statut === 'executee' ? 'validée' : 'en échec'}] ${a.resume}\nRésultat : ${resultat}`, { auto: true, agent });
 }
 
 /* ---------- Mode développeur ---------- */
@@ -1061,8 +1062,8 @@ $('#dlg-progression').addEventListener('close', () => { $('#prog-fete').hidden =
 /* ---------- Mes affaires ---------- */
 async function afficherAffaires() {
   const charge = '<li class="muted">Chargement…</li>';
-  $('#rappels-list').innerHTML = charge; $('#docs-list').innerHTML = charge; $('#memory-list').innerHTML = charge; $('#listes-zone').innerHTML = '';
-  const [rappels, listes, docs, memoire] = await Promise.all(['/api/reminders', '/api/lists', '/api/documents', '/api/memories'].map((u) => api(u).catch(() => [])));
+  $('#rappels-list').innerHTML = charge; $('#docs-list').innerHTML = charge; $('#ventes-list').innerHTML = charge; $('#memory-list').innerHTML = charge; $('#listes-zone').innerHTML = '';
+  const [rappels, listes, docs, memoire, ventes] = await Promise.all(['/api/reminders', '/api/lists', '/api/documents', '/api/memories', '/api/ventes'].map((u) => api(u).catch(() => [])));
 
   const ul = $('#rappels-list');
   ul.innerHTML = rappels.length ? '' : `<li class="vide">${etatVide(ICONES_SVG.organisation, 'Aucun rappel', 'Demande à l\u2019agent Organisation : « Rappelle-moi de payer le loyer le 5 à 9 h ».')}</li>`;
@@ -1085,6 +1086,20 @@ async function afficherAffaires() {
     li.querySelector('.doc-ouvrir').onclick = () => ouvrirDocument(d.id);
     li.querySelector('.suppr').onclick = async () => { await api(`/api/documents/${d.id}`, { method: 'DELETE' }); li.remove(); };
     ud.appendChild(li);
+  }
+
+  const uv = $('#ventes-list');
+  uv.innerHTML = ventes.length ? '' : `<li class="vide">${etatVide(ICONES_SVG.vendeur, 'Aucune vente suivie', 'Demande à l’agent Vendeur : « Suis la vente de cette robe pour Awa, 18 000 FCFA ».')}</li>`;
+  for (const v of ventes) {
+    const li = document.createElement('li');
+    const options = Object.entries(STATUTS_VENTE).map(([id, lib]) => `<option value="${id}"${v.statut === id ? ' selected' : ''}>${echapper(lib)}</option>`).join('');
+    li.innerHTML = `<div><div><strong>${echapper(v.client_nom)}</strong> — ${echapper(v.produit)}${v.prix !== null && v.prix !== undefined ? ` · ${Number(v.prix).toLocaleString('fr-FR')} FCFA` : ''}</div><div class="muted small">${echapper(v.client_telephone)}${v.envoye ? ' · message envoyé' : ''} · ${new Date(v.created_at).toLocaleDateString('fr-FR')}</div></div><select class="statut-vente" aria-label="Statut de la vente">${options}</select><button type="button" class="suppr">Supprimer</button>`;
+    li.querySelector('select').onchange = async (e) => {
+      try { await api(`/api/ventes/${v.id}`, { method: 'PATCH', body: JSON.stringify({ statut: e.target.value }) }); }
+      catch (ex) { toast(ex.message); e.target.value = v.statut; }
+    };
+    li.querySelector('.suppr').onclick = async () => { await api(`/api/ventes/${v.id}`, { method: 'DELETE' }); li.remove(); };
+    uv.appendChild(li);
   }
 
   const um = $('#memory-list');
