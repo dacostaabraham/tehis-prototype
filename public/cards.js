@@ -289,6 +289,24 @@ export function noteActivite(texte) {
   return n;
 }
 
+/**
+ * Carte du digest quotidien (« briefing Tehis ») : rappels du jour, ventes en
+ * attente, pharmacie de garde la plus proche, astuce du jour. Les sections
+ * sans données sont absentes — jamais de contenu inventé.
+ */
+export function carteDigest(d) {
+  const prix = (v) => (v.prix != null ? ` · ${Number(v.prix).toLocaleString('fr-FR')} FCFA` : '');
+  const blocs = [];
+  if (d.ventes?.length) blocs.push(`<div class="digest-sec"><strong>Ventes en attente (${d.ventes.length})</strong>${d.ventes.map((v) => `<div>${echapper(v.client_nom)} — ${echapper(v.produit)}${prix(v)} (${v.statut === 'reserve' ? 'Réservé' : 'Intéressé'})</div>`).join('')}</div>`);
+  if (d.rappels?.length) blocs.push(`<div class="digest-sec"><strong>Rappels aujourd'hui (${d.rappels.length})</strong>${d.rappels.map((x) => `<div>${echapper(x.texte)}</div>`).join('')}</div>`);
+  if (d.pharmacies?.length) blocs.push(`<div class="digest-sec"><strong>Pharmacies de garde</strong>${d.pharmacies.map((p) => `<div>${echapper(p.nom)}${p.commune ? ` (${echapper(p.commune)})` : ''}${p.telephone ? ` — ${echapper(p.telephone)}` : ''}</div>`).join('')}</div>`);
+  blocs.push(`<div class="digest-sec"><strong>💡 Astuce du jour</strong><div>${echapper(d.astuce)}</div></div>`);
+  return `<div class="digest-head"><span>☀️ Ton briefing du matin</span><button type="button" class="digest-masquer" data-digest-masquer aria-label="Masquer le briefing du jour">✕</button></div>
+  <div class="muted small">${echapper(dateFr(`${d.date}T08:00:00.000Z`))} · ${echapper(d.resume)}</div>
+  ${blocs.join('')}
+  <button type="button" class="btn small" data-digest-affaires>Ouvrir Mes affaires</button>`;
+}
+
 export function blocSources(liste) {
   const el = document.createElement('div');
   el.className = 'sources';

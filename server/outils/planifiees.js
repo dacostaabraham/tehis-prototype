@@ -106,7 +106,8 @@ export async function traiterRappelPlanifie(store, rappel, { notifier, maintenan
   }
   if (rappel.type_action === 'recap_matinal') {
     const r = await preparerRecapMatinal(store, rappel.user_id, maintenant, { lireGardes });
-    if (notifier) await notifier(rappel.user_id, { titre: 'Ton récap du matin est prêt', corps: r.action.resume, tag: `action-${r.action.id}`, url: '/?panneau=affaires' });
+    // La notification renvoie vers la carte du digest, sur l'écran d'accueil (chat) — le récap reste aussi visible dans « Mes affaires » › Activité.
+    if (notifier) await notifier(rappel.user_id, { titre: 'Ton récap du matin est prêt', corps: r.action.resume, tag: `action-${r.action.id}`, url: '/?panneau=chat' });
     return { action: r.action };
   }
   if (rappel.type_action === 'checkin_objectif') {

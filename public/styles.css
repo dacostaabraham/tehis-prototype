@@ -177,6 +177,11 @@ button.fiche-agent.creer { border-style: dashed; border-color: var(--accent); cu
 
 /* Header d'agent dans le chat */
 .agent-header { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--surface); flex-shrink: 0; }
+/* Digest quotidien (« briefing Tehis ») : carte en tête du chat, sous l'en-tête d'agent. */
+.digest { margin: 10px 16px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+.digest-head { display: flex; justify-content: space-between; align-items: center; font-weight: 700; }
+.digest-masquer { border: 0; background: transparent; color: var(--muted); font-size: 15px; min-height: 32px; min-width: 32px; }
+.digest-sec { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
 .agent-header-texte { display: flex; flex-direction: column; min-width: 0; flex-grow: 1; }
 .agent-header-texte strong { font-size: 14px; }
 .agent-header-texte .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

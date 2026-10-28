@@ -19,8 +19,9 @@ import { creerCoffre } from './coffre.js';
 import { initNotifications } from './notifications.js';
 import { creerDocument, TYPES_DOCUMENTS } from './outils/documents.js';
 import { executerOrganisation } from './outils/organisation.js';
-import { preparerEnvoiClient, executerVente, executerEnvoiValide, STATUTS_VENTE } from './outils/ventes.js';
+import { preparerEnvoiClient, executerVente, executerEnvoiValide, STATUTS_VENTE, assurerRecapMatinal } from './outils/ventes.js';
 import { executerObjectif, synchroniserObjectifs, annulerCheckinsObjectif } from './outils/objectifs.js';
+import { digestDuJour } from './outils/digest.js';
 import { chercherLieux, positionValide } from './outils/lieux.js';
 import { preparerChoix } from './outils/interaction.js';
 import { executerDev, preparerAction, OUTILS_A_VALIDER, SCHEMAS_DEV } from './outils/dev.js';
@@ -371,6 +372,14 @@ app.patch('/api/objectifs/:id', async (req, res) => {
   return res.json(r);
 });
 app.delete('/api/objectifs/:id', async (req, res) => { await annulerCheckinsObjectif(req.store, req.params.id); await req.store.deleteObjectif(req.params.id); res.json({ ok: true }); });
+
+/* ---------- Digest quotidien (« briefing Tehis ») ---------- */
+app.get('/api/digest', async (req, res) => {
+  // Le récap quotidien est programmé une fois pour toutes (8 h, répété) : la
+  // notification matinale arrive ensuite toute seule, même sans vente suivie.
+  await assurerRecapMatinal(req.store);
+  res.json({ digest: await digestDuJour(store, req.compte.id, new Date()) });
+});
 
 /* ---------- Journal d'activité (tâches planifiées qui agissent) ---------- */
 app.get('/api/actions', async (req, res) => {

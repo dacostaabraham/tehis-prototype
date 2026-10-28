@@ -6,7 +6,7 @@ import { AGENTS, GROUPES, NOMS_OFFRES, QUOTAS, PRIX, LIMITES_PERSO, accesAgent a
 import { initPerso, ouvrirCreation, ouvrirEdition } from './perso.js';
 import { voixDisponible, parler, arreter, debloquer, configurerVoixIA, voixNaturelle } from './voix.js';
 import { markdown, echapper } from './shared/markdown.js';
-import { carteResultat, carteDocument, carteSuggestion, carteOffreDev, carteValidation, noteActivite, blocSources, blocListe, brancherListes, actionsDocument, dateFr, STATUTS_VENTE } from './cards.js';
+import { carteResultat, carteDocument, carteSuggestion, carteOffreDev, carteValidation, carteDigest, noteActivite, blocSources, blocListe, brancherListes, actionsDocument, dateFr, STATUTS_VENTE } from './cards.js';
 import { toast } from './shared/ui.js';
 import { ACCESSOIRES, GAINS } from './shared/progression.js';
 import { carteLieux, cartePosition, carteChoix, barreProximite, obtenirPosition, positionConnue } from './lieux.js';
@@ -165,6 +165,23 @@ async function ouvrirApp() {
   choisirAgent(accesAgent(memorise, etat.profil).ok ? memorise : 'compagnon');
   const panneau = new URLSearchParams(location.search).get('panneau');
   ouvrirPanneau(['affaires', 'calc', 'reglages'].includes(panneau) ? panneau : 'chat');
+  afficherDigest();
+}
+
+/* ---------- Digest quotidien ---------- */
+/** Carte « briefing Tehis » en tête du chat, une fois par jour (masquable pour la journée). */
+async function afficherDigest() {
+  const zone = $('#digest');
+  if (!zone) return;
+  const { digest } = await api('/api/digest').catch(() => ({}));
+  if (!digest || lsGet('tehis_digest_masque', '') === digest.date) { zone.hidden = true; return; }
+  zone.innerHTML = carteDigest(digest);
+  zone.hidden = false;
+  zone.querySelector('[data-digest-masquer]').addEventListener('click', () => {
+    lsSet('tehis_digest_masque', digest.date);
+    zone.hidden = true;
+  });
+  zone.querySelector('[data-digest-affaires]').addEventListener('click', () => ouvrirPanneau('affaires'));
 }
 
 function humeur(m) {
