@@ -172,6 +172,17 @@ export function carteResultat(r, ctx = {}) {
     corps = r.ventes.length ? `<ul class="simple">${r.ventes.map((v) => `<li><strong>${echapper(v.client_nom)}</strong> — ${echapper(v.produit)}${v.prix !== null && v.prix !== undefined ? ` · ${fcfa(v.prix)}` : ''}<br><span class="muted small">${echapper(STATUTS_VENTE[v.statut] || v.statut)}${v.envoye ? ' · message envoyé' : ''} · ${echapper(new Date(v.created_at).toLocaleDateString('fr-FR'))}</span></li>`).join('')}</ul>` : '<p class="muted">Aucune vente suivie pour l\'instant.</p>';
   }
 
+  if (r.type === 'objectif') {
+    const montant = (v) => r.unite === 'FCFA' ? fcfa(v) : `${Number(v).toLocaleString('fr-FR')}`;
+    corps = `<div><strong>${echapper(r.libelle)}</strong></div>
+      <div class="barre-prog" style="margin:8px 0 4px"><i style="width:${r.pourcentage}%"></i></div>
+      ${kv([['Progression', `${montant(r.progression)} sur ${montant(r.cible)} (${r.pourcentage} %)`, true], ['Échéance', r.echeance ? echapper(new Date(`${r.echeance}T00:00:00.000Z`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })) : 'sans échéance'], ['Statut', echapper(r.libelle_statut), true]])}`;
+  }
+
+  if (r.type === 'objectifs') {
+    corps = r.objectifs.length ? `<ul class="simple">${r.objectifs.map((o) => `<li><strong>${echapper(o.libelle)}</strong> — ${o.unite === 'FCFA' ? fcfa(o.progression) : o.progression} sur ${o.unite === 'FCFA' ? fcfa(o.cible) : o.cible} (${o.pourcentage} %)${o.statut !== 'actif' ? ` · ${echapper(o.libelle_statut)}` : ''}</li>`).join('')}</ul>` : '<p class="muted">Aucun objectif suivi pour l\'instant.</p>';
+  }
+
   el.insertAdjacentHTML('beforeend', corps);
   requestAnimationFrame(() => { const c = el.querySelector('canvas'); apres.forEach((f) => f(c)); });
   return el;

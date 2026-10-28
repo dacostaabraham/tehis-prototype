@@ -8,7 +8,8 @@ import { SCHEMAS_OUTILS_BUDGET } from '../public/shared/budget.js';
 import { AGENTS } from '../public/shared/agents.js';
 import { SCHEMA_DOCUMENT } from './outils/documents.js';
 import { SCHEMAS_ORGANISATION } from './outils/organisation.js';
-import { SCHEMAS_VENTES } from './outils/ventes.js';
+import { SCHEMAS_VENTES, formaterPrix } from './outils/ventes.js';
+import { SCHEMAS_OBJECTIFS } from './outils/objectifs.js';
 import { SCHEMAS_DEV } from './outils/dev.js';
 import { SCHEMA_LIEUX } from './outils/lieux.js';
 import { SCHEMA_CHOIX } from './outils/interaction.js';
@@ -69,7 +70,8 @@ const ROLES = {
 Tu discutes, tu conseilles, tu aides à réfléchir et à organiser ses idées.
 Tehis propose aussi des agents spécialisés : Vendeur en ligne, Rédaction et courriers, Emploi et CV, Budget et tontine, Finance entreprise, Démarches administratives, Répétiteur scolaire, Organisation et rappels, Santé au quotidien, Logement et déménagement.
 Quand une demande relève clairement de l'un d'eux, réponds brièvement puis utilise « suggerer_agent ».
-Si l'utilisateur dit qu'il est développeur et veut coder ou déployer une application, utilise « proposer_mode_developpeur ».`,
+Si l'utilisateur dit qu'il est développeur et veut coder ou déployer une application, utilise « proposer_mode_developpeur ».
+Objectifs suivis : quand l'utilisateur parle d'une cible chiffrée (ventes, épargne, tontine, clients…), propose de créer un objectif suivi avec « creer_objectif » (libellé, cible, échéance). Pour un objectif de ventes, mets source à « ventes » : la progression se calcule toute seule depuis ses ventes payées et livrées. Demande-lui ensuite où il en est avec « maj_progression_objectif », et liste ses objectifs avec « lister_objectifs ».`,
 
   vendeur: `Tu es l'agent « Vendeur en ligne » de Tehis. Tu aides les commerçants et vendeuses en ligne de Côte d'Ivoire à vendre sur WhatsApp (statuts, catalogue WhatsApp Business), Facebook, Instagram et TikTok.
 Ce que tu fais :
@@ -83,6 +85,7 @@ Ce que tu fais aussi (V1 « Vendeur qui agit ») :
 - Envoi à un client : avec « proposer_envoi_client », propose le message exact et le destinataire. Tu ne l'envoies pas toi-même : l'utilisateur valide d'abord la carte dans l'app, puis le lien WhatsApp s'ouvre avec le message déjà rempli, depuis son propre WhatsApp. Sur WhatsApp, précise que la validation se fait dans l'app.
 - Relance automatique : quand tu suis une vente (intéressé ou réservé), Tehis programme tout seul la relance à J+2 à 9 h : il prépare le message et le met en carte de validation dans « Mes affaires » › Activité. Ne crée plus de rappel manuel pour la relance, et dis au vendeur qu'elle arrivera toute seule. Si la vente est payée, livrée ou déjà envoyée, la relance est annulée.
 - Récap du matin : chaque matin à 8 h, Tehis prépare un récap (ventes en attente, rappels du jour, pharmacies de garde), visible dans « Mes affaires » › Activité.
+- Objectifs de ventes : si le vendeur vise un montant (ex. 50 000 FCFA de ventes en novembre), crée un objectif avec « creer_objectif » (source « ventes ») : la progression se calcule toute seule depuis ses ventes payées et livrées, et Tehis fera le point chaque semaine.
 Règles : ne propose un envoi que si tu connais le nom et le numéro du client (demande-les s'ils manquent) ; n'invente jamais un numéro, un prix ou un statut ; ne promets jamais un stock, un délai ou une garantie que l'utilisateur n'a pas confirmés.
 Ne promets jamais un délai, un stock ou une garantie que l'utilisateur n'a pas confirmé.`,
 
@@ -105,6 +108,7 @@ Méthode :
 2. **Tout calcul passe par tes outils** (budget mensuel, plan d'épargne, tontine). Ne calcule jamais de tête un résultat que tu présentes.
 3. Donne 2 ou 3 actions concrètes et réalistes, sans culpabiliser. Le soutien à la famille est une dépense normale, à prévoir.
 4. Pour une tontine, explique la cagnotte, l'avance ou l'épargne forcée selon la position, et les risques (membre qui arrête de cotiser) avec des précautions simples.
+Objectifs d'épargne : si l'utilisateur vise un montant à épargner (tontine, projet, rentrée), crée un objectif avec « creer_objectif » et fais le point chaque semaine avec « maj_progression_objectif ».
 Limites : pas de conseil de placement ni de crédit précis ; pour un prêt, conseille de comparer le coût total auprès de plusieurs établissements agréés. Méfie l'utilisateur face aux promesses de gains rapides.`,
 
   finance: `Tu es l'agent financier de Tehis, pour les entrepreneurs, commerçants et chefs d'entreprise, surtout en Côte d'Ivoire.
@@ -116,6 +120,7 @@ Méthode de travail :
 3. **Tout calcul passe par tes outils** (cascade, point mort, prix, projection 12 mois, BFR). Ne calcule jamais de tête un résultat que tu présentes à l'utilisateur.
 4. Explique le résultat avec les notions de la leçon concernée, relie-le à une décision concrète (prix, coûts, financement, délais de paiement) et donne 1 à 3 leviers d'action.
 5. Ramène toujours à la trésorerie : « Pourras-tu payer tes charges à la fin du mois ? »
+Objectifs financiers : si l'entrepreneur vise un chiffre (ventes, trésorerie, épargne), crée un objectif avec « creer_objectif » et suis sa progression chaque semaine avec « maj_progression_objectif ».
 6. Pour les prix, applique les trois méthodes (plancher, plafond, marché) et le facteur négociation ivoirien.
 
 Limites : tu n'es ni expert-comptable, ni conseiller fiscal, ni conseiller en investissement. Pour la fiscalité, les déclarations ou un prêt, recommande de valider avec un professionnel. Pas de conseil d'achat d'actions, de cryptomonnaies ou de placement.
@@ -194,13 +199,14 @@ export function instructionsStatiques(agent) {
 
 const DATE_FR = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Africa/Abidjan', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-export function contexteDynamique({ nomCompagnon, espece, prenom, souvenirs = [], offre, positionPartagee = false, progression = null }, maintenant = new Date()) {
+export function contexteDynamique({ nomCompagnon, espece, prenom, souvenirs = [], offre, positionPartagee = false, progression = null, objectifs = [] }, maintenant = new Date()) {
   return `Contexte :
 - Nous sommes le ${DATE_FR.format(maintenant)} (heure d'Abidjan, UTC+0). Date ISO : ${maintenant.toISOString().slice(0, 16)}.
 - Dans l'app, tu es incarné par ${nomCompagnon || 'Kiki'}, un compagnon ${espece || 'chat'} en 3D choisi par l'utilisateur.
 - ${prenom ? `L'utilisateur s'appelle ${prenom}.` : "Tu ne connais pas encore le prénom de l'utilisateur."} Offre : ${offre || 'gratuit'}.
 - Position de l'utilisateur : ${positionPartagee ? 'partagée (utilisable par « chercher_lieux »)' : 'non partagée'}.${progression ? `
-- Le compagnon grandit avec l'utilisateur : niveau ${progression.niveau} (${progression.nom}), ${progression.points} points, série de ${progression.serie} jour${progression.serie > 1 ? 's' : ''}. N'en parle que si l'utilisateur le demande ou pour le féliciter brièvement d'une belle série.` : ''}
+- Le compagnon grandit avec l'utilisateur : niveau ${progression.niveau} (${progression.nom}), ${progression.points} points, série de ${progression.serie} jour${progression.serie > 1 ? 's' : ''}. N'en parle que si l'utilisateur le demande ou pour le féliciter brièvement d'une belle série.` : ''}${objectifs.length ? `
+- Objectifs en cours : ${objectifs.map((o) => `${o.libelle} — ${o.unite === 'FCFA' ? formaterPrix(o.progression) : `${o.progression}`} sur ${o.unite === 'FCFA' ? formaterPrix(o.cible) : `${o.cible}`}${o.unite === 'FCFA' ? '' : ` ${o.unite.toLowerCase()}`} (${o.pourcentage} %)${o.echeance ? `, échéance ${o.echeance}` : ''}`).join(' ; ')}. Propose un point quand l'utilisateur parle de ses ventes ou de son épargne, sans le harceler.` : ''}
 Ce que tu sais déjà de lui :
 ${souvenirs.length ? souvenirs.map((s) => `- [${s.categorie}] ${s.fait}`).join('\n') : "- rien pour l'instant"}`;
 }
@@ -210,16 +216,16 @@ const calculPrix = SCHEMAS_OUTILS_FINANCE.find((s) => s.name === 'calcul_prix');
 export function outils(agent) {
   const base = (() => {
     switch (agent) {
-      case 'finance': return [...SCHEMAS_OUTILS_FINANCE, OUTIL_MEMOIRE];
-      case 'budget': return [...SCHEMAS_OUTILS_BUDGET, OUTIL_MEMOIRE];
-      case 'vendeur': return [SCHEMA_DOCUMENT, calculPrix, ...SCHEMAS_VENTES, ...SCHEMAS_ORGANISATION, OUTIL_MEMOIRE];
+      case 'finance': return [...SCHEMAS_OUTILS_FINANCE, ...SCHEMAS_OBJECTIFS, OUTIL_MEMOIRE];
+      case 'budget': return [...SCHEMAS_OUTILS_BUDGET, ...SCHEMAS_OBJECTIFS, OUTIL_MEMOIRE];
+      case 'vendeur': return [SCHEMA_DOCUMENT, calculPrix, ...SCHEMAS_VENTES, ...SCHEMAS_OBJECTIFS, ...SCHEMAS_ORGANISATION, OUTIL_MEMOIRE];
       case 'redaction': case 'emploi': case 'repetiteur': return [SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
       case 'demarches': return [OUTIL_RECHERCHE_WEB, SCHEMA_LIEUX, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
       case 'sante': return [OUTIL_RECHERCHE_WEB, SCHEMA_LIEUX, ...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
       case 'logement': return [SCHEMA_LIEUX, ...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
       case 'organisation': return [...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
       case 'dev': return [...SCHEMAS_DEV, OUTIL_MEMOIRE];
-      default: return [OUTIL_SUGGERER_AGENT, OUTIL_MODE_DEV, SCHEMA_LIEUX, OUTIL_MEMOIRE];
+      default: return [OUTIL_SUGGERER_AGENT, OUTIL_MODE_DEV, SCHEMA_LIEUX, ...SCHEMAS_OBJECTIFS, OUTIL_MEMOIRE];
     }
   })();
   // Tous les agents peuvent proposer des boutons de réponse rapide (placé avant la mémoire).
