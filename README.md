@@ -39,6 +39,7 @@ Compagnon IA en 3D avec des **agents du quotidien** pour la Côte d'Ivoire, et u
 - **Mes affaires** : rappels, listes à cocher, documents, et ce que le compagnon retient (bouton « Oublier »).
 - **Tâches planifiées qui agissent** : quand une vente est suivie (intéressé ou réservé), Tehis programme tout seul la relance à J+2 à 9 h — il prépare le message exact et le met en carte de validation dans « Mes affaires » › Activité (rien n'est envoyé sans validation). Chaque matin à 8 h, il prépare aussi un récap (ventes en attente, rappels du jour, pharmacies de garde). La relance est annulée si la vente est payée, livrée ou déjà envoyée.
 - **Journal d'activité** : « Mes affaires » › Activité liste ce que Tehis a préparé ou fait (relances à valider, récaps du matin, envois validés), avec le statut de chaque action.
+- **Objectifs suivis** : un objectif = libellé, cible chiffrée (FCFA ou nombre), échéance, progression visible dans « Mes affaires » › Objectifs. Création par le compagnon (ou les agents Vendeur, Budget, Finance) quand l'utilisateur parle d'une cible chiffrée, ou depuis le formulaire dans l'app ; check-in hebdomadaire (rappel + point dans le journal d'activité) ; progression mise à jour à la main, ou calculée toute seule depuis les ventes payées et livrées (source « ventes »). Objectif atteint = entrée dans le journal.
 - **Mode démo** automatique tant qu'aucune clé API n'est configurée : chaque agent montre un exemple.
 
 ## Agents personnalisés (« Crée ton agent »)

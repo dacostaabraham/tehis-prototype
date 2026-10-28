@@ -20,6 +20,7 @@ import { initNotifications } from './notifications.js';
 import { creerDocument, TYPES_DOCUMENTS } from './outils/documents.js';
 import { executerOrganisation } from './outils/organisation.js';
 import { preparerEnvoiClient, executerVente, executerEnvoiValide, STATUTS_VENTE } from './outils/ventes.js';
+import { executerObjectif, synchroniserObjectifs, annulerCheckinsObjectif } from './outils/objectifs.js';
 import { chercherLieux, positionValide } from './outils/lieux.js';
 import { preparerChoix } from './outils/interaction.js';
 import { executerDev, preparerAction, OUTILS_A_VALIDER, SCHEMAS_DEV } from './outils/dev.js';
@@ -354,6 +355,22 @@ app.patch('/api/ventes/:id', async (req, res) => {
   return v ? res.json(v) : res.status(404).json({ erreur: 'Vente introuvable.' });
 });
 app.delete('/api/ventes/:id', async (req, res) => { await req.store.supprimerRappelsAction('relance_vente', req.params.id); await req.store.deleteVente(req.params.id); res.json({ ok: true }); });
+
+/* ---------- Objectifs suivis ---------- */
+app.get('/api/objectifs', async (req, res) => res.json(await synchroniserObjectifs(req.store)));
+app.post('/api/objectifs', async (req, res) => {
+  const r = await executerObjectif(req.store, 'creer_objectif', req.body || {});
+  return r.erreur ? res.status(400).json(r) : res.status(201).json(r);
+});
+app.patch('/api/objectifs/:id', async (req, res) => {
+  const corps = { id: req.params.id, ...(req.body || {}) };
+  const nom = corps.statut ? 'cloturer_objectif' : corps.progression !== undefined ? 'maj_progression_objectif' : null;
+  if (!nom) return res.status(400).json({ erreur: 'Indique une progression ou un statut (atteint, abandonne).' });
+  const r = await executerObjectif(req.store, nom, corps);
+  if (r.erreur) return res.status(r.erreur === 'Objectif introuvable.' ? 404 : 400).json(r);
+  return res.json(r);
+});
+app.delete('/api/objectifs/:id', async (req, res) => { await annulerCheckinsObjectif(req.store, req.params.id); await req.store.deleteObjectif(req.params.id); res.json({ ok: true }); });
 
 /* ---------- Journal d'activité (tâches planifiées qui agissent) ---------- */
 app.get('/api/actions', async (req, res) => {
@@ -723,6 +740,12 @@ async function executerOutil(agent, nom, input = {}, ctx = {}) {
     const r = await executerVente(ctx.store, nom, input);
     return { resultat: r, evenement: r.type && !r.erreur ? ['tool', { name: nom, input, result: r }] : null };
   }
+  // Objectifs suivis : compagnon, Vendeur, Budget et Finance.
+  if (['creer_objectif', 'lister_objectifs', 'maj_progression_objectif', 'cloturer_objectif'].includes(nom)) {
+    if (!['compagnon', 'vendeur', 'budget', 'finance'].includes(agent)) return { resultat: { erreur: 'Cet outil est réservé au compagnon et aux agents Vendeur, Budget et Finance.' } };
+    const r = await executerObjectif(ctx.store, nom, input);
+    return { resultat: r, evenement: r.type && !r.erreur ? ['tool', { name: nom, input, result: r }] : null };
+  }
   if (NOMS_OUTILS_DEV.has(nom)) {
     if (agent !== 'dev') return { resultat: { erreur: 'Outil réservé au mode développeur.' } };
     if (OUTILS_A_VALIDER.has(nom)) {
@@ -778,9 +801,11 @@ async function repondreAgent(req, { agent, fiche = null, historique, position = 
     }
 
     const souvenirs = (await req.store.listMemories()).slice(0, 40);
+    let objectifsActifs = [];
+    try { objectifsActifs = (await synchroniserObjectifs(req.store)).filter((o) => o.statut === 'actif').slice(0, 5); } catch { objectifsActifs = []; }
     const system = [
       { type: 'text', text: fiche ? instructionsPerso(fiche) : instructionsStatiques(agent), cache_control: { type: 'ephemeral' } },
-      { type: 'text', text: contexteDynamique({ ...p, souvenirs, positionPartagee: Boolean(position), progression: resumeProgression(await req.store.getProgression()) }) + (canal === 'whatsapp' ? CONSIGNE_WHATSAPP : '') }
+      { type: 'text', text: contexteDynamique({ ...p, souvenirs, objectifs: objectifsActifs, positionPartagee: Boolean(position), progression: resumeProgression(await req.store.getProgression()) }) + (canal === 'whatsapp' ? CONSIGNE_WHATSAPP : '') }
     ];
     let listeOutils = fiche ? outilsPerso(fiche) : outils(agent);
     if (fiche) await req.store.incrementUsage(jourAbidjan(), 'perso');

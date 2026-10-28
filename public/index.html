@@ -160,6 +160,23 @@
       <h3 class="sec">Activité</h3>
       <p class="muted small">Ce que Tehis a préparé ou fait pour toi. Une action en attente se valide ici avant tout envoi.</p>
       <ul id="activite-list" class="item-list"></ul>
+      <h3 class="sec">Objectifs</h3>
+      <p class="muted small">Une cible chiffrée, une échéance, une progression visible. Dis à ton compagnon : « Je veux vendre pour 50 000 FCFA en novembre ».</p>
+      <ul id="objectifs-list" class="item-list"></ul>
+      <form id="form-objectif" class="form-compte">
+        <label for="obj-libelle">Nouvel objectif</label>
+        <input id="obj-libelle" type="text" maxlength="120" placeholder="Ex. 50 000 FCFA de ventes en novembre" required>
+        <div class="obj-ligne">
+          <div><label for="obj-cible">Cible</label><input id="obj-cible" type="number" min="1" step="1" inputmode="numeric" placeholder="50 000" required></div>
+          <div><label for="obj-unite">Unité</label><select id="obj-unite"><option value="FCFA">FCFA</option><option value="nombre">Nombre</option></select></div>
+        </div>
+        <div class="obj-ligne">
+          <div><label for="obj-echeance">Échéance (facultative)</label><input id="obj-echeance" type="date"></div>
+          <div><label for="obj-source">Progression</label><select id="obj-source"><option value="manuel">À mettre à jour à la main</option><option value="ventes">Calculée depuis mes ventes payées</option></select></div>
+        </div>
+        <p id="obj-msg" class="small" role="status"></p>
+        <button class="btn small accent" type="submit">Créer l'objectif</button>
+      </form>
       <h3 class="sec">Rappels à venir</h3>
       <ul id="rappels-list" class="item-list"></ul>
       <h3 class="sec">Listes</h3>

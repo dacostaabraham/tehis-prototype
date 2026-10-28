@@ -17,6 +17,7 @@ const PAR_COMPTE = new Set([
   'getList', 'getListById', 'saveList', 'listLists', 'deleteList',
   'addAction', 'getAction', 'updateAction', 'listActions', 'getSecret', 'setSecret',
   'addVente', 'listVentes', 'getVente', 'updateVente', 'deleteVente', 'supprimerRappelsAction',
+  'addObjectif', 'listObjectifs', 'getObjectif', 'updateObjectif', 'deleteObjectif',
   'listCustomAgents', 'getCustomAgent', 'saveCustomAgent', 'deleteCustomAgent',
   'incrementUsage', 'getUsage', 'addSubscription', 'listSubscriptions',
   'getConversation', 'saveConversation', 'deleteConversations', 'getProgression', 'saveProgression',
@@ -40,7 +41,7 @@ const publicUser = (u) => u && Object.fromEntries(PUBLIC.map((k) => [k, u[k]]));
 class MemoryStore {
   constructor() {
     this.users = []; this.memories = []; this.documents = []; this.reminders = []; this.lists = [];
-    this.actions = []; this.ventes = []; this.secrets = new Map(); this.subs = new Map();
+    this.actions = []; this.ventes = []; this.objectifs = []; this.secrets = new Map(); this.subs = new Map();
     this.persos = []; this.usage = new Map(); this.conversations = new Map();
   }
   async init() {}
@@ -65,7 +66,7 @@ class MemoryStore {
   }
   async listUsers() { return [...this.users].sort(tri('created_at', 1)).map(publicUser); }
   async deleteUser(id) {
-    for (const k of ['memories', 'documents', 'reminders', 'lists', 'actions', 'ventes', 'persos']) this[k] = this[k].filter((x) => x.user_id !== id);
+    for (const k of ['memories', 'documents', 'reminders', 'lists', 'actions', 'ventes', 'objectifs', 'persos']) this[k] = this[k].filter((x) => x.user_id !== id);
     for (const [e, s] of this.subs) if (s.user_id === id) this.subs.delete(e);
     for (const k of [...this.conversations.keys()]) if (k.startsWith(`${id}|`)) this.conversations.delete(k);
     for (const k of [...this.secrets.keys()]) if (k.startsWith(`u:${id}:`)) this.secrets.delete(k);
@@ -73,7 +74,7 @@ class MemoryStore {
   }
   /** Données de l'ancien prototype (sans compte) rattachées au compte administrateur. */
   async rattacherAnciennesDonnees(uid) {
-    for (const k of ['memories', 'documents', 'reminders', 'lists', 'actions', 'ventes', 'persos']) this[k].forEach((x) => { x.user_id ??= uid; });
+    for (const k of ['memories', 'documents', 'reminders', 'lists', 'actions', 'ventes', 'objectifs', 'persos']) this[k].forEach((x) => { x.user_id ??= uid; });
     for (const s of this.subs.values()) s.user_id ??= uid;
   }
 
@@ -123,12 +124,26 @@ class MemoryStore {
       .map(([a]) => a)
       .slice(0, limite);
   }
-  /** Supprime les rappels planifiés non envoyés d'un type donné (ex. relance d'une vente payée). */
-  async supprimerRappelsAction(uid, type_action, vente_id) {
+  /** Supprime les rappels planifiés non envoyés d'un type donné (ex. relance d'une vente payée, check-in d'un objectif clôturé). */
+  async supprimerRappelsAction(uid, type_action, objet_id) {
     const avant = this.reminders.length;
-    this.reminders = this.reminders.filter((r) => !(r.user_id === uid && !r.envoye && r.type_action === type_action && r.action_input?.vente_id === vente_id));
+    this.reminders = this.reminders.filter((r) => !(r.user_id === uid && !r.envoye && r.type_action === type_action && (r.action_input?.vente_id === objet_id || r.action_input?.objectif_id === objet_id)));
     return avant - this.reminders.length;
   }
+
+  /* Objectifs suivis : libellé, cible chiffrée, échéance, progression, statut. */
+  async addObjectif(uid, o) {
+    const x = { id: randomUUID(), user_id: uid, progression: 0, echeance: null, statut: 'actif', source: 'manuel', ...o, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    this.objectifs.push(x); return x;
+  }
+  async listObjectifs(uid) { return this.#a(this.objectifs, uid).sort(tri('created_at')); }
+  async getObjectif(uid, id) { return this.objectifs.find((o) => o.id === id && o.user_id === uid) || null; }
+  async updateObjectif(uid, id, champs) {
+    const o = await this.getObjectif(uid, id);
+    if (o) Object.assign(o, champs, { updated_at: new Date().toISOString() });
+    return o || null;
+  }
+  async deleteObjectif(uid, id) { this.objectifs = this.objectifs.filter((o) => !(o.id === id && o.user_id === uid)); }
 
   /* Ventes suivies par l'agent Vendeur en ligne (V1 « Vendeur qui agit »). */
   async addVente(uid, v) {
@@ -191,7 +206,7 @@ class MemoryStore {
   async dernierPaiementEnAttente(uid) { return (await this.listPaiements(uid)).find((p) => p.statut === 'en_attente') || null; }
 }
 
-const TABLES_COMPTE = ['memories', 'documents', 'reminders', 'lists', 'actions', 'ventes', 'push_subscriptions', 'custom_agents'];
+const TABLES_COMPTE = ['memories', 'documents', 'reminders', 'lists', 'actions', 'ventes', 'objectifs', 'push_subscriptions', 'custom_agents'];
 
 class PgStore {
   constructor(url) {
@@ -210,6 +225,8 @@ class PgStore {
       create table if not exists actions (id uuid primary key, outil text not null, input jsonb not null, resume text not null, statut text not null, resultat jsonb, created_at timestamptz not null default now());
       create table if not exists ventes (id uuid primary key, user_id uuid, client_nom text not null, client_telephone text not null, produit text not null, prix numeric, statut text not null default 'interesse', envoye boolean not null default false, envoye_le timestamptz, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
       create index if not exists ventes_user on ventes (user_id);
+      create table if not exists objectifs (id uuid primary key, user_id uuid, libelle text not null, cible numeric not null, unite text not null default 'FCFA', progression numeric not null default 0, echeance date, statut text not null default 'actif', source text not null default 'manuel', created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+      create index if not exists objectifs_user on objectifs (user_id);
       create table if not exists secrets (nom text primary key, valeur text not null);
       create table if not exists push_subscriptions (endpoint text primary key, data jsonb not null);
       create table if not exists custom_agents (id uuid primary key, data jsonb not null, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
@@ -297,7 +314,23 @@ class PgStore {
   async getAction(uid, id) { return (await this.q('select * from actions where id = $1 and user_id = $2', [id, uid])).rows[0] || null; }
   async updateAction(uid, id, { statut, resultat }) { return (await this.q('update actions set statut = $3, resultat = $4 where id = $1 and user_id = $2 returning *', [id, uid, statut, JSON.stringify(resultat ?? null)])).rows[0]; }
   async listActions(uid, { limite = 100 } = {}) { return (await this.q('select * from actions where user_id = $1 order by created_at desc limit $2', [uid, limite])).rows; }
-  async supprimerRappelsAction(uid, type_action, vente_id) { return (await this.q("delete from reminders where user_id = $1 and not envoye and type_action = $2 and action_input->>'vente_id' = $3", [uid, type_action, vente_id])).rowCount; }
+  async supprimerRappelsAction(uid, type_action, objet_id) { return (await this.q("delete from reminders where user_id = $1 and not envoye and type_action = $2 and (action_input->>'vente_id' = $3 or action_input->>'objectif_id' = $3)", [uid, type_action, objet_id])).rowCount; }
+
+  /* Objectifs suivis : libellé, cible chiffrée, échéance, progression, statut. */
+  #objectif(r) { return r && { ...r, cible: Number(r.cible), progression: Number(r.progression), echeance: r.echeance ? new Date(r.echeance).toISOString().slice(0, 10) : null, created_at: new Date(r.created_at).toISOString(), updated_at: new Date(r.updated_at).toISOString() }; }
+  async addObjectif(uid, { libelle, cible, unite = 'FCFA', echeance = null, source = 'manuel' }) {
+    return this.#objectif((await this.q('insert into objectifs (id, user_id, libelle, cible, unite, echeance, source) values ($1,$2,$3,$4,$5,$6,$7) returning *', [randomUUID(), uid, libelle, cible, unite, echeance, source])).rows[0]);
+  }
+  async listObjectifs(uid) { return (await this.q('select * from objectifs where user_id = $1 order by created_at desc limit 200', [uid])).rows.map((r) => this.#objectif(r)); }
+  async getObjectif(uid, id) { return this.#objectif((await this.q('select * from objectifs where id = $1 and user_id = $2', [id, uid])).rows[0]); }
+  async updateObjectif(uid, id, champs) {
+    const autorises = ['progression', 'statut'];
+    const cles = Object.keys(champs).filter((k) => autorises.includes(k));
+    if (!cles.length) return this.getObjectif(uid, id);
+    const sets = cles.map((k, i) => `${k} = $${i + 3}`);
+    return this.#objectif((await this.q(`update objectifs set ${sets.join(', ')}, updated_at = now() where id = $1 and user_id = $2 returning *`, [id, uid, ...cles.map((k) => champs[k])])).rows[0]);
+  }
+  async deleteObjectif(uid, id) { await this.q('delete from objectifs where id = $1 and user_id = $2', [id, uid]); }
 
   /* Ventes suivies par l'agent Vendeur en ligne (V1 « Vendeur qui agit »). */
   #vente(r) { return r && { ...r, prix: r.prix === null || r.prix === undefined ? null : Number(r.prix), created_at: new Date(r.created_at).toISOString(), updated_at: new Date(r.updated_at).toISOString(), envoye_le: r.envoye_le ? new Date(r.envoye_le).toISOString() : null }; }

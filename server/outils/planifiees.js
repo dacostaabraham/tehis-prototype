@@ -14,9 +14,10 @@
 //   du jour, pharmacies de garde) enregistré directement dans le journal
 //   d'activité, sans rien à valider (c'est une information, pas un envoi).
 import { preparerEnvoiClient, formaterPrix, dateRecapMatinal } from './ventes.js';
+import { preparerCheckinObjectif } from './objectifs.js';
 import { gardesDeLaSemaine } from './garde.js';
 
-export const TYPES_ACTION = ['relance_vente', 'recap_matinal'];
+export const TYPES_ACTION = ['relance_vente', 'recap_matinal', 'checkin_objectif'];
 export { dateRecapMatinal };
 
 /** Message de relance, construit uniquement à partir des données réelles de la vente. */
@@ -106,6 +107,16 @@ export async function traiterRappelPlanifie(store, rappel, { notifier, maintenan
   if (rappel.type_action === 'recap_matinal') {
     const r = await preparerRecapMatinal(store, rappel.user_id, maintenant, { lireGardes });
     if (notifier) await notifier(rappel.user_id, { titre: 'Ton récap du matin est prêt', corps: r.action.resume, tag: `action-${r.action.id}`, url: '/?panneau=affaires' });
+    return { action: r.action };
+  }
+  if (rappel.type_action === 'checkin_objectif') {
+    // Check-in hebdomadaire : Tehis fait le point sur l'objectif dans le
+    // journal d'activité et envoie une notification qui y renvoie. Si
+    // l'objectif est clôturé ou atteint entre-temps, le rappel est consommé
+    // sans bruit (le check-in a déjà été annulé à la clôture).
+    const r = await preparerCheckinObjectif(store.pour(rappel.user_id), rappel, maintenant);
+    if (r.ignore) return { ignore: true, raison: r.raison };
+    if (notifier) await notifier(rappel.user_id, { titre: 'Point sur ton objectif', corps: r.action.resume, tag: `action-${r.action.id}`, url: '/?panneau=affaires' });
     return { action: r.action };
   }
   return { ignore: true, raison: `type_action inconnu : ${rappel.type_action}` };

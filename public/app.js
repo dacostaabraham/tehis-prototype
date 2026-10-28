@@ -1079,6 +1079,10 @@ function afficherActivite(actions) {
         },
         statut: 'en_attente'
       }, ctxActivite));
+    } else if (a.outil === 'checkin_objectif' && a.resultat?.objectif) {
+      const o = a.resultat.objectif;
+      const montant = o.unite === 'FCFA' ? `${Number(o.progression).toLocaleString('fr-FR')} FCFA sur ${Number(o.cible).toLocaleString('fr-FR')} FCFA` : `${Number(o.progression).toLocaleString('fr-FR')} sur ${Number(o.cible).toLocaleString('fr-FR')}`;
+      li.innerHTML = `<div><div>🎯 ${echapper(a.resume)}</div><div class="barre-prog" style="margin:6px 0 4px"><i style="width:${o.pourcentage}%"></i></div><div class="muted small">${montant} · ${o.pourcentage} % · mets ta progression à jour dans « Objectifs » ci-dessous.</div>${date}</div>`;
     } else if (a.outil === 'recap_matinal' && a.resultat) {
       const r = a.resultat;
       const blocs = [];
@@ -1095,10 +1099,11 @@ function afficherActivite(actions) {
 
 async function afficherAffaires() {
   const charge = '<li class="muted">Chargement…</li>';
-  $('#activite-list').innerHTML = charge; $('#rappels-list').innerHTML = charge; $('#docs-list').innerHTML = charge; $('#ventes-list').innerHTML = charge; $('#memory-list').innerHTML = charge; $('#listes-zone').innerHTML = '';
-  const [actions, rappels, listes, docs, memoire, ventes] = await Promise.all(['/api/actions', '/api/reminders', '/api/lists', '/api/documents', '/api/memories', '/api/ventes'].map((u) => api(u).catch(() => [])));
+  $('#activite-list').innerHTML = charge; $('#objectifs-list').innerHTML = charge; $('#rappels-list').innerHTML = charge; $('#docs-list').innerHTML = charge; $('#ventes-list').innerHTML = charge; $('#memory-list').innerHTML = charge; $('#listes-zone').innerHTML = '';
+  const [actions, objectifs, rappels, listes, docs, memoire, ventes] = await Promise.all(['/api/actions', '/api/objectifs', '/api/reminders', '/api/lists', '/api/documents', '/api/memories', '/api/ventes'].map((u) => api(u).catch(() => [])));
 
   afficherActivite(actions);
+  afficherObjectifs(objectifs);
 
   const ul = $('#rappels-list');
   ul.innerHTML = rappels.length ? '' : `<li class="vide">${etatVide(ICONES_SVG.organisation, 'Aucun rappel', 'Demande à l\u2019agent Organisation : « Rappelle-moi de payer le loyer le 5 à 9 h ».')}</li>`;
@@ -1146,6 +1151,61 @@ async function afficherAffaires() {
     um.appendChild(li);
   }
 }
+
+/** Objectifs suivis : progression visible, mise à jour à la main ou calculée depuis les ventes. */
+function afficherObjectifs(objectifs) {
+  const uo = $('#objectifs-list');
+  uo.innerHTML = objectifs.length ? '' : `<li class="vide">${etatVide(ICONES_SVG.compagnon, 'Aucun objectif pour l’instant', 'Dis à ton compagnon : « Je veux vendre pour 50 000 FCFA en novembre ».')}</li>`;
+  const montant = (o, v) => o.unite === 'FCFA' ? `${Number(v).toLocaleString('fr-FR')} FCFA` : Number(v).toLocaleString('fr-FR');
+  for (const o of objectifs) {
+    const li = document.createElement('li');
+    const echeance = o.echeance ? new Date(`${o.echeance}T00:00:00.000Z`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : 'sans échéance';
+    const badge = o.statut === 'atteint' ? ' 🎉 Atteint' : o.statut === 'abandonne' ? ' · Abandonné' : '';
+    li.innerHTML = `<div style="flex:1;min-width:0"><div><strong>${echapper(o.libelle)}</strong>${badge}</div>
+      <div class="barre-prog" style="margin:6px 0 4px"><i style="width:${o.pourcentage}%"></i></div>
+      <div class="muted small">${montant(o, o.progression)} sur ${montant(o, o.cible)} · ${o.pourcentage} % · échéance ${echapper(echeance)}${o.source === 'ventes' ? ' · calculé depuis tes ventes payées' : ''}</div>
+      ${o.statut === 'actif' && o.source === 'manuel' ? `<div class="obj-maj"><input type="number" min="0" step="1" inputmode="numeric" placeholder="Nouvelle progression" aria-label="Nouvelle progression"><button type="button" class="btn small">Mettre à jour</button></div>` : ''}
+      <div class="obj-actions">${o.statut === 'actif' ? `<button type="button" class="btn small" data-act="atteint">Marquer atteint</button><button type="button" class="btn small danger" data-act="abandonne">Abandonner</button>` : ''}<button type="button" class="btn small danger" data-act="supprimer">Supprimer</button></div>
+    </div>`;
+    const majBtn = li.querySelector('.obj-maj button');
+    if (majBtn) {
+      majBtn.onclick = async () => {
+        const saisie = li.querySelector('.obj-maj input').value;
+        if (saisie === '') { toast('Indique ta progression totale à ce jour.'); return; }
+        try { await api(`/api/objectifs/${o.id}`, { method: 'PATCH', body: JSON.stringify({ progression: Number(saisie) }) }); afficherAffaires(); }
+        catch (ex) { toast(ex.message); }
+      };
+    }
+    li.querySelectorAll('[data-act]').forEach((b) => {
+      b.onclick = async () => {
+        try {
+          if (b.dataset.act === 'supprimer') await api(`/api/objectifs/${o.id}`, { method: 'DELETE' });
+          else await api(`/api/objectifs/${o.id}`, { method: 'PATCH', body: JSON.stringify({ statut: b.dataset.act === 'atteint' ? 'atteint' : 'abandonne' }) });
+          afficherAffaires();
+        } catch (ex) { toast(ex.message); }
+      };
+    });
+    uo.appendChild(li);
+  }
+}
+
+$('#form-objectif').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = $('#obj-msg');
+  msg.textContent = '';
+  try {
+    await api('/api/objectifs', { method: 'POST', body: JSON.stringify({
+      libelle: $('#obj-libelle').value,
+      cible: Number($('#obj-cible').value),
+      unite: $('#obj-unite').value,
+      echeance: $('#obj-echeance').value || undefined,
+      source: $('#obj-source').value
+    }) });
+    e.target.reset();
+    msg.textContent = 'Objectif créé. Tehis fera le point chaque semaine.';
+    afficherAffaires();
+  } catch (ex) { msg.textContent = ex.message; }
+});
 
 async function ouvrirDocument(id) {
   const d = await api(`/api/documents/${id}`);
