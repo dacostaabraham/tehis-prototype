@@ -2,7 +2,7 @@
 // Chaque donnée appartient à un compte (user_id). store.pour(uid) renvoie une vue limitée à ce compte :
 // le reste du serveur (outils, agents) l'utilise sans jamais voir les données des autres.
 import pg from 'pg';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomBytes } from 'node:crypto';
 
 const SENSIBLE = /(sant[ée]|maladie|diagnostic|m[ée]dicament|IBAN|num[ée]ro de (compte|carte)|CNI|passeport|mot de passe|token|cl[ée] api)/i;
 const tri = (k, sens = -1) => (a, b) => (String(a[k]) < String(b[k]) ? -sens : String(a[k]) > String(b[k]) ? sens : 0);
@@ -12,7 +12,9 @@ const MAX_CONVERSATION = 300_000; // caractères JSON par agent
 // Méthodes qui reçoivent l'identifiant du compte en premier argument.
 const PAR_COMPTE = new Set([
   'getProfile', 'setProfile', 'listMemories', 'addMemory', 'deleteMemory',
-  'addDocument', 'listDocuments', 'getDocument', 'deleteDocument',
+  'addDocument', 'listDocuments', 'getDocument', 'deleteDocument', 'updateDocument',
+  'addDocumentVersion', 'listDocumentVersions', 'getDocumentVersion',
+  'creerPartage', 'getPartage', 'revoquerPartage',
   'addReminder', 'listReminders', 'deleteReminder', 'updateReminder',
   'getList', 'getListById', 'saveList', 'listLists', 'deleteList',
   'addAction', 'getAction', 'updateAction', 'listActions', 'getSecret', 'setSecret',
@@ -40,7 +42,7 @@ const publicUser = (u) => u && Object.fromEntries(PUBLIC.map((k) => [k, u[k]]));
 
 class MemoryStore {
   constructor() {
-    this.users = []; this.memories = []; this.documents = []; this.reminders = []; this.lists = [];
+    this.users = []; this.memories = []; this.documents = []; this.documentVersions = []; this.partages = []; this.reminders = []; this.lists = [];
     this.actions = []; this.ventes = []; this.objectifs = []; this.secrets = new Map(); this.subs = new Map();
     this.persos = []; this.usage = new Map(); this.conversations = new Map();
   }
@@ -66,7 +68,7 @@ class MemoryStore {
   }
   async listUsers() { return [...this.users].sort(tri('created_at', 1)).map(publicUser); }
   async deleteUser(id) {
-    for (const k of ['memories', 'documents', 'reminders', 'lists', 'actions', 'ventes', 'objectifs', 'persos']) this[k] = this[k].filter((x) => x.user_id !== id);
+    for (const k of ['memories', 'documents', 'documentVersions', 'partages', 'reminders', 'lists', 'actions', 'ventes', 'objectifs', 'persos']) this[k] = this[k].filter((x) => x.user_id !== id);
     for (const [e, s] of this.subs) if (s.user_id === id) this.subs.delete(e);
     for (const k of [...this.conversations.keys()]) if (k.startsWith(`${id}|`)) this.conversations.delete(k);
     for (const k of [...this.secrets.keys()]) if (k.startsWith(`u:${id}:`)) this.secrets.delete(k);
@@ -74,7 +76,7 @@ class MemoryStore {
   }
   /** Données de l'ancien prototype (sans compte) rattachées au compte administrateur. */
   async rattacherAnciennesDonnees(uid) {
-    for (const k of ['memories', 'documents', 'reminders', 'lists', 'actions', 'ventes', 'objectifs', 'persos']) this[k].forEach((x) => { x.user_id ??= uid; });
+    for (const k of ['memories', 'documents', 'documentVersions', 'partages', 'reminders', 'lists', 'actions', 'ventes', 'objectifs', 'persos']) this[k].forEach((x) => { x.user_id ??= uid; });
     for (const s of this.subs.values()) s.user_id ??= uid;
   }
 
@@ -89,10 +91,55 @@ class MemoryStore {
   }
   async deleteMemory(uid, id) { this.memories = this.memories.filter((m) => !(m.id === id && m.user_id === uid)); }
 
-  async addDocument(uid, d) { const doc = { id: randomUUID(), user_id: uid, ...d, created_at: new Date().toISOString() }; this.documents.push(doc); return doc; }
+  async addDocument(uid, d) { const doc = { id: randomUUID(), user_id: uid, ...d, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }; this.documents.push(doc); return doc; }
   async listDocuments(uid) { return this.#a(this.documents, uid).sort(tri('created_at')).map(({ contenu, ...r }) => ({ ...r, apercu: contenu.slice(0, 140) })); }
   async getDocument(uid, id) { return this.documents.find((d) => d.id === id && d.user_id === uid) || null; }
-  async deleteDocument(uid, id) { this.documents = this.documents.filter((d) => !(d.id === id && d.user_id === uid)); }
+  async updateDocument(uid, id, champs) {
+    const d = await this.getDocument(uid, id);
+    if (d) Object.assign(d, champs, { updated_at: new Date().toISOString() });
+    return d || null;
+  }
+  async deleteDocument(uid, id) {
+    this.documents = this.documents.filter((d) => !(d.id === id && d.user_id === uid));
+    this.documentVersions = this.documentVersions.filter((v) => !(v.document_id === id && v.user_id === uid));
+    this.partages = this.partages.filter((p) => !(p.document_id === id && p.user_id === uid));
+  }
+
+  /* Versions d'un document : rien n'est jamais supprimé, la restauration crée une nouvelle version. */
+  async addDocumentVersion(uid, { document_id, titre, contenu, origine = 'agent' }) {
+    const numero = this.documentVersions.filter((v) => v.document_id === document_id && v.user_id === uid).reduce((m, v) => Math.max(m, v.numero), 0) + 1;
+    const v = { id: randomUUID(), user_id: uid, document_id, numero, titre, contenu, origine, created_at: new Date().toISOString() };
+    this.documentVersions.push(v); return v;
+  }
+  async listDocumentVersions(uid, document_id) {
+    return this.#a(this.documentVersions, uid).filter((v) => v.document_id === document_id)
+      .sort((a, b) => b.numero - a.numero)
+      .map(({ contenu, ...r }) => ({ ...r, apercu: contenu.slice(0, 140) }));
+  }
+  async getDocumentVersion(uid, document_id, numero) {
+    return this.documentVersions.find((v) => v.document_id === document_id && v.numero === Number(numero) && v.user_id === uid) || null;
+  }
+
+  /* Partage d'un document par lien (lecture seule, jeton non devinable, un seul lien actif par document). */
+  async creerPartage(uid, document_id) {
+    const existant = await this.getPartage(uid, document_id);
+    if (existant) return existant;
+    const p = { jeton: randomBytes(18).toString('base64url'), user_id: uid, document_id, actif: true, created_at: new Date().toISOString(), revoque_le: null };
+    this.partages.push(p); return p;
+  }
+  async getPartage(uid, document_id) { return this.partages.find((p) => p.document_id === document_id && p.user_id === uid && p.actif) || null; }
+  async revoquerPartage(uid, document_id) {
+    const p = await this.getPartage(uid, document_id);
+    if (p) { p.actif = false; p.revoque_le = new Date().toISOString(); }
+    return p || null;
+  }
+  /** Lecture publique d'un document partagé : seul ce document, sans aucune autre donnée du compte. */
+  async getDocumentParJeton(jeton) {
+    const p = this.partages.find((x) => x.jeton === jeton && x.actif);
+    if (!p) return null;
+    const d = this.documents.find((x) => x.id === p.document_id);
+    return d ? { id: d.id, type: d.type, titre: d.titre, contenu: d.contenu, created_at: d.created_at } : null;
+  }
 
   async addReminder(uid, r) { const x = { id: randomUUID(), user_id: uid, envoye: false, ...r, created_at: new Date().toISOString() }; this.reminders.push(x); return x; }
   async listReminders(uid, { aVenir = false } = {}) { return this.#a(this.reminders, uid).filter((r) => !aVenir || !r.envoye).sort(tri('quand', 1)); }
@@ -211,7 +258,7 @@ class MemoryStore {
   async dernierPaiementEnAttente(uid) { return (await this.listPaiements(uid)).find((p) => p.statut === 'en_attente') || null; }
 }
 
-const TABLES_COMPTE = ['memories', 'documents', 'reminders', 'lists', 'actions', 'ventes', 'objectifs', 'push_subscriptions', 'custom_agents'];
+const TABLES_COMPTE = ['memories', 'documents', 'document_versions', 'partages_documents', 'reminders', 'lists', 'actions', 'ventes', 'objectifs', 'push_subscriptions', 'custom_agents'];
 
 class PgStore {
   constructor(url) {
@@ -225,6 +272,11 @@ class PgStore {
       create table if not exists profile (id int primary key default 1, data jsonb not null default '{}'::jsonb);
       create table if not exists memories (id uuid primary key, fait text not null, categorie text not null, created_at timestamptz not null default now());
       create table if not exists documents (id uuid primary key, type text not null, titre text not null, contenu text not null, agent text, created_at timestamptz not null default now());
+      create table if not exists document_versions (id uuid primary key, document_id uuid not null, user_id uuid, numero int not null, titre text not null, contenu text not null, origine text not null default 'agent', created_at timestamptz not null default now(), unique (document_id, numero));
+      create index if not exists document_versions_document on document_versions (document_id);
+      create table if not exists partages_documents (jeton text primary key, document_id uuid not null, user_id uuid, actif boolean not null default true, created_at timestamptz not null default now(), revoque_le timestamptz);
+      create index if not exists partages_documents_document on partages_documents (document_id);
+      alter table documents add column if not exists updated_at timestamptz not null default now();
       create table if not exists reminders (id uuid primary key, texte text not null, quand timestamptz not null, repetition text not null default 'aucune', envoye boolean not null default false, created_at timestamptz not null default now());
       create table if not exists lists (id uuid primary key, nom text not null, titre text not null, items jsonb not null default '[]'::jsonb, updated_at timestamptz not null default now());
       create table if not exists actions (id uuid primary key, outil text not null, input jsonb not null, resume text not null, statut text not null, resultat jsonb, created_at timestamptz not null default now());
@@ -293,7 +345,42 @@ class PgStore {
   async addDocument(uid, { type, titre, contenu, agent }) { return (await this.q('insert into documents (id, user_id, type, titre, contenu, agent) values ($1,$2,$3,$4,$5,$6) returning *', [randomUUID(), uid, type, titre, contenu, agent])).rows[0]; }
   async listDocuments(uid) { return (await this.q('select id, type, titre, agent, created_at, left(contenu, 140) as apercu from documents where user_id = $1 order by created_at desc limit 100', [uid])).rows; }
   async getDocument(uid, id) { return (await this.q('select * from documents where id = $1 and user_id = $2', [id, uid])).rows[0] || null; }
-  async deleteDocument(uid, id) { await this.q('delete from documents where id = $1 and user_id = $2', [id, uid]); }
+  async updateDocument(uid, id, { titre, contenu }) {
+    return (await this.q('update documents set titre = coalesce($3, titre), contenu = coalesce($4, contenu), updated_at = now() where id = $1 and user_id = $2 returning *', [id, uid, titre ?? null, contenu ?? null])).rows[0] || null;
+  }
+  async deleteDocument(uid, id) {
+    await this.q('delete from document_versions where document_id = $1 and user_id = $2', [id, uid]);
+    await this.q('delete from partages_documents where document_id = $1 and user_id = $2', [id, uid]);
+    await this.q('delete from documents where id = $1 and user_id = $2', [id, uid]);
+  }
+
+  /* Versions d'un document : rien n'est jamais supprimé, la restauration crée une nouvelle version. */
+  async addDocumentVersion(uid, { document_id, titre, contenu, origine = 'agent' }) {
+    return (await this.q('insert into document_versions (id, document_id, user_id, numero, titre, contenu, origine) values ($1,$2,$3,(select coalesce(max(numero),0)+1 from document_versions where document_id = $2),$4,$5,$6) returning *', [randomUUID(), document_id, uid, titre, contenu, origine])).rows[0];
+  }
+  async listDocumentVersions(uid, document_id) {
+    return (await this.q('select id, document_id, numero, titre, origine, created_at, left(contenu, 140) as apercu from document_versions where document_id = $1 and user_id = $2 order by numero desc limit 50', [document_id, uid])).rows;
+  }
+  async getDocumentVersion(uid, document_id, numero) {
+    return (await this.q('select * from document_versions where document_id = $1 and numero = $2 and user_id = $3', [document_id, Number(numero), uid])).rows[0] || null;
+  }
+
+  /* Partage d'un document par lien (lecture seule, jeton non devinable, un seul lien actif par document). */
+  async creerPartage(uid, document_id) {
+    const existant = await this.getPartage(uid, document_id);
+    if (existant) return existant;
+    return (await this.q('insert into partages_documents (jeton, document_id, user_id) values ($1,$2,$3) returning *', [randomBytes(18).toString('base64url'), document_id, uid])).rows[0];
+  }
+  async getPartage(uid, document_id) {
+    return (await this.q('select * from partages_documents where document_id = $1 and user_id = $2 and actif order by created_at desc limit 1', [document_id, uid])).rows[0] || null;
+  }
+  async revoquerPartage(uid, document_id) {
+    return (await this.q('update partages_documents set actif = false, revoque_le = now() where document_id = $1 and user_id = $2 and actif returning *', [document_id, uid])).rows[0] || null;
+  }
+  /** Lecture publique d'un document partagé : seul ce document, sans aucune autre donnée du compte. */
+  async getDocumentParJeton(jeton) {
+    return (await this.q('select d.id, d.type, d.titre, d.contenu, d.created_at from partages_documents p join documents d on d.id = p.document_id where p.jeton = $1 and p.actif', [jeton])).rows[0] || null;
+  }
 
   async addReminder(uid, { texte, quand, repetition, type_action = null, action_input = null }) { return this.#rappel((await this.q('insert into reminders (id, user_id, texte, quand, repetition, type_action, action_input) values ($1,$2,$3,$4,$5,$6,$7) returning *', [randomUUID(), uid, texte, quand, repetition, type_action, action_input ? JSON.stringify(action_input) : null])).rows[0]); }
   async listReminders(uid, { aVenir = false } = {}) { return (await this.q(`select * from reminders where user_id = $1 ${aVenir ? 'and not envoye' : ''} order by quand asc limit 200`, [uid])).rows.map((r) => this.#rappel(r)); }
