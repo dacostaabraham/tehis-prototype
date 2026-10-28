@@ -350,9 +350,16 @@ app.get('/api/ventes', async (req, res) => res.json(await req.store.listVentes()
 app.patch('/api/ventes/:id', async (req, res) => {
   if (!STATUTS_VENTE.includes(req.body?.statut)) return res.status(400).json({ erreur: 'Statut inconnu : intéressé, réservé, payé ou livré.' });
   const v = await req.store.updateVente(req.params.id, { statut: req.body.statut });
+  if (v && (req.body.statut === 'paye' || req.body.statut === 'livre')) await req.store.supprimerRappelsAction('relance_vente', v.id);
   return v ? res.json(v) : res.status(404).json({ erreur: 'Vente introuvable.' });
 });
-app.delete('/api/ventes/:id', async (req, res) => { await req.store.deleteVente(req.params.id); res.json({ ok: true }); });
+app.delete('/api/ventes/:id', async (req, res) => { await req.store.supprimerRappelsAction('relance_vente', req.params.id); await req.store.deleteVente(req.params.id); res.json({ ok: true }); });
+
+/* ---------- Journal d'activité (tâches planifiées qui agissent) ---------- */
+app.get('/api/actions', async (req, res) => {
+  const json = (x) => { try { return typeof x === 'string' ? JSON.parse(x) : x; } catch { return x; } };
+  res.json((await req.store.listActions({ limite: 100 })).map((a) => ({ id: a.id, outil: a.outil, resume: a.resume, statut: a.statut, created_at: a.created_at, input: json(a.input), resultat: json(a.resultat) })));
+});
 
 /* ---------- Notifications ---------- */
 let notifications = null;
