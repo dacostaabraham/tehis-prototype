@@ -190,9 +190,10 @@ test('boucle complète : check-in dû → journal + notification, puis reprogram
 
 test('lister_objectifs : présentés avec pourcentage, les plus récents d’abord', async () => {
   const b = brut(); const s = vue(b);
-  await executerObjectif(s, 'creer_objectif', { libelle: 'Premier objectif', cible: 10000 }, MAINTENANT);
+  const premier = await executerObjectif(s, 'creer_objectif', { libelle: 'Premier objectif', cible: 10000 }, MAINTENANT);
   const deuxieme = await executerObjectif(s, 'creer_objectif', { libelle: 'Deuxième objectif', cible: 20000, unite: 'nombre' }, MAINTENANT);
-  // Dates de création distinctes (même milliseconde sinon) : le plus récent d'abord.
+  // Dates de création fixées toutes les deux (les deux créations partagent la milliseconde réelle sinon) : le plus récent d'abord.
+  b.objectifs.find((o) => o.id === premier.id).created_at = '2026-10-28T09:00:00.000Z';
   b.objectifs.find((o) => o.id === deuxieme.id).created_at = '2026-10-28T12:00:00.000Z';
   const r = await executerObjectif(s, 'lister_objectifs', {});
   assert.equal(r.type, 'objectifs');
