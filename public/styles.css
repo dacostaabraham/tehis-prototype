@@ -250,6 +250,15 @@ ul.simple { margin: 0; padding-left: 18px; display: flex; flex-direction: column
 .doc-apercu p, .doc-corps p { margin: 0 0 8px; }
 .doc-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .doc-actions .btn { display: inline-flex; align-items: center; text-decoration: none; color: var(--ink); }
+.doc-bloc { margin-top: 16px; }
+.doc-bloc h3 { font: 600 15px var(--display); margin: 0 0 8px; }
+.doc-bloc p { margin: 0 0 8px; }
+.doc-bloc a { color: var(--accent); overflow-wrap: anywhere; }
+.doc-versions { list-style: none; margin: 0; padding: 0; }
+.doc-versions li { border-top: 1px solid var(--line, #E1E8EE); padding: 10px 0; }
+.doc-versions .doc-actions { margin-top: 6px; }
+.doc-version-contenu { background: var(--surface); border-radius: 12px; padding: 12px; margin-top: 8px; font-size: 14px; }
+.doc-version-contenu p { margin: 0 0 8px; }
 .doc-corps { background: var(--surface); border-radius: 14px; padding: 14px; margin: 8px 0 12px; font-size: 14px; }
 .lien { align-self: flex-start; border: 0; background: transparent; color: var(--accent); font-weight: 600; font-size: 13px; min-height: 32px; padding: 0; }
 .validation { border-color: var(--accent); }
