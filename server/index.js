@@ -21,6 +21,7 @@ import { creerDocument, TYPES_DOCUMENTS } from './outils/documents.js';
 import { executerOrganisation } from './outils/organisation.js';
 import { preparerEnvoiClient, executerVente, executerEnvoiValide, STATUTS_VENTE, assurerRecapMatinal } from './outils/ventes.js';
 import { executerObjectif, synchroniserObjectifs, annulerCheckinsObjectif } from './outils/objectifs.js';
+import { configAgenda, urlAutorisation, echangerCode, lireJetons, sauverJetons, supprimerJetons, listerEvenementsJour, creerEvenement, executerAgenda } from './outils/agenda.js';
 import { digestDuJour } from './outils/digest.js';
 import { chercherLieux, positionValide } from './outils/lieux.js';
 import { preparerChoix } from './outils/interaction.js';
@@ -190,6 +191,8 @@ app.post('/webhook/chariow', async (req, res) => {
 
 /* ---------- Code secret oublié : nouveau code par WhatsApp ---------- */
 const codesOublies = new Map(); // téléphone → { hache, expire, essais }
+// États OAuth Google Agenda en attente : state → { uid, expire } (10 min).
+const etatsAgenda = new Map();
 app.post('/api/code-oublie', async (req, res) => {
   const telephone = normaliserTelephone(req.body?.telephone);
   if (!WHATSAPP.actif) return res.status(503).json({ erreur: "Écris à l'équipe Tehis : elle t'enverra un code provisoire." });
@@ -350,9 +353,24 @@ app.delete('/api/lists/:id', async (req, res) => { await req.store.deleteList(re
 /* ---------- Ventes suivies (agent Vendeur en ligne) ---------- */
 app.get('/api/ventes', async (req, res) => res.json(await req.store.listVentes()));
 app.patch('/api/ventes/:id', async (req, res) => {
-  if (!STATUTS_VENTE.includes(req.body?.statut)) return res.status(400).json({ erreur: 'Statut inconnu : intéressé, réservé, payé ou livré.' });
-  const v = await req.store.updateVente(req.params.id, { statut: req.body.statut });
-  if (v && (req.body.statut === 'paye' || req.body.statut === 'livre')) await req.store.supprimerRappelsAction('relance_vente', v.id);
+  const champs = {};
+  if (req.body?.statut !== undefined) {
+    if (!STATUTS_VENTE.includes(req.body.statut)) return res.status(400).json({ erreur: 'Statut inconnu : intéressé, réservé, payé ou livré.' });
+    champs.statut = req.body.statut;
+  }
+  if (req.body?.client_nom !== undefined) {
+    const nom = String(req.body.client_nom).trim().slice(0, 60);
+    if (!nom) return res.status(400).json({ erreur: 'Indique le nom du client.' });
+    champs.client_nom = nom;
+  }
+  if (req.body?.client_telephone !== undefined) {
+    const tel = normaliserTelephone(req.body.client_telephone);
+    if (!tel) return res.status(400).json({ erreur: 'Numéro de client invalide.' });
+    champs.client_telephone = tel;
+  }
+  if (!Object.keys(champs).length) return res.status(400).json({ erreur: 'Indique un statut, un nom ou un numéro.' });
+  const v = await req.store.updateVente(req.params.id, champs);
+  if (v && champs.statut && (champs.statut === 'paye' || champs.statut === 'livre')) await req.store.supprimerRappelsAction('relance_vente', v.id);
   return v ? res.json(v) : res.status(404).json({ erreur: 'Vente introuvable.' });
 });
 app.delete('/api/ventes/:id', async (req, res) => { await req.store.supprimerRappelsAction('relance_vente', req.params.id); await req.store.deleteVente(req.params.id); res.json({ ok: true }); });
@@ -378,7 +396,54 @@ app.get('/api/digest', async (req, res) => {
   // Le récap quotidien est programmé une fois pour toutes (8 h, répété) : la
   // notification matinale arrive ensuite toute seule, même sans vente suivie.
   await assurerRecapMatinal(req.store);
-  res.json({ digest: await digestDuJour(store, req.compte.id, new Date()) });
+  // Les événements d'agenda du jour sont lus en direct (rien si l'agenda
+  // n'est pas connecté) : la section est alors simplement absente.
+  const lireEvenements = async (jour) => {
+    const r = await listerEvenementsJour(req.store, coffre, configAgenda(), jour);
+    return r.evenements || [];
+  };
+  res.json({ digest: await digestDuJour(store, req.compte.id, new Date(), { lireEvenements }) });
+});
+
+/* ---------- Agenda Google ---------- */
+// Connexion OAuth : l'utilisateur est redirigé vers Google puis revient ici.
+// Les identifiants OAuth viennent de GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
+// (voir README) : sans eux, la connexion répond 503 avec un état vide propre.
+app.get('/api/agenda/statut', async (req, res) => {
+  const config = configAgenda();
+  const jetons = await lireJetons(req.store, coffre);
+  res.json({ configure: config.configure, connecte: Boolean(jetons), email: jetons?.email || null });
+});
+app.get('/api/agenda/google/connecter', (req, res) => {
+  const config = configAgenda();
+  if (!config.configure) return res.status(503).json({ erreur: 'Agenda Google non configuré sur le serveur. L’équipe doit ajouter GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET (voir README).' });
+  if (!URL_APP) return res.status(503).json({ erreur: 'Adresse publique de l’app non configurée (APP_URL).' });
+  const state = randomBytes(16).toString('hex');
+  etatsAgenda.set(state, { uid: req.compte.id, expire: Date.now() + 10 * 60_000 });
+  res.redirect(urlAutorisation(config, `${URL_APP}/api/agenda/google/retour`, state));
+});
+app.get('/api/agenda/google/retour', async (req, res) => {
+  const state = String(req.query.state || '');
+  const etat = etatsAgenda.get(state);
+  etatsAgenda.delete(state);
+  const base = '/?panneau=affaires';
+  if (!etat || etat.uid !== req.compte.id || etat.expire < Date.now() || req.query.error) return res.redirect(`${base}&agenda=erreur`);
+  const r = await echangerCode({ code: String(req.query.code || ''), config: configAgenda(), redirectUri: `${URL_APP}/api/agenda/google/retour` });
+  if (r.erreur) return res.redirect(`${base}&agenda=erreur`);
+  await sauverJetons(req.store, coffre, r.jetons);
+  res.redirect(`${base}&agenda=connecte`);
+});
+app.post('/api/agenda/deconnecter', async (req, res) => { await supprimerJetons(req.store); res.json({ ok: true }); });
+app.get('/api/agenda/evenements', async (req, res) => {
+  const jour = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.jour || '')) ? req.query.jour : jourAbidjan();
+  const r = await listerEvenementsJour(req.store, coffre, configAgenda(), jour);
+  if (r.erreur) return res.status(502).json({ erreur: r.erreur });
+  res.json({ connecte: !r.nonConnecte, jour, evenements: r.evenements || [] });
+});
+app.post('/api/agenda/evenements', async (req, res) => {
+  const r = await creerEvenement(req.store, coffre, configAgenda(), req.body || {});
+  if (r.erreur) return res.status(r.erreur.startsWith('Agenda Google non connecté') ? 409 : 400).json(r);
+  res.status(201).json(r);
 });
 
 /* ---------- Journal d'activité (tâches planifiées qui agissent) ---------- */
@@ -755,6 +820,13 @@ async function executerOutil(agent, nom, input = {}, ctx = {}) {
     const r = await executerObjectif(ctx.store, nom, input);
     return { resultat: r, evenement: r.type && !r.erreur ? ['tool', { name: nom, input, result: r }] : null };
   }
+  // Agenda Google : Organisation et compagnon. La création d'un événement est
+  // une action explicite de l'utilisateur, jamais automatique.
+  if (['creer_evenement_agenda', 'lister_evenements_agenda'].includes(nom)) {
+    if (!['organisation', 'compagnon'].includes(agent)) return { resultat: { erreur: 'Cet outil est réservé à l’agent Organisation et au compagnon.' } };
+    const r = await executerAgenda(ctx.store, ctx.coffre, configAgenda(), nom, input);
+    return { resultat: r, evenement: r.type && !r.erreur ? ['tool', { name: nom, input, result: r }] : null };
+  }
   if (NOMS_OUTILS_DEV.has(nom)) {
     if (agent !== 'dev') return { resultat: { erreur: 'Outil réservé au mode développeur.' } };
     if (OUTILS_A_VALIDER.has(nom)) {
@@ -867,7 +939,7 @@ async function repondreAgent(req, { agent, fiche = null, historique, position = 
       const resultats = [];
       for (const bloc of msg.content.filter((b) => b.type === 'tool_use')) {
         send('mood', { mood: bloc.name === 'chercher_lieux' ? 'cherche' : 'travaille' });
-        const { resultat, evenement } = await executerOutil(agent, bloc.name, bloc.input, { position, store: req.store, req });
+        const { resultat, evenement } = await executerOutil(agent, bloc.name, bloc.input, { position, store: req.store, req, coffre });
         if (EVENEMENT_OUTIL[bloc.name] && !resultat?.erreur && resultat?.type !== 'besoin_position') evenements.push({ type: EVENEMENT_OUTIL[bloc.name] });
         if (evenement) send(...evenement);
         resultats.push({ type: 'tool_result', tool_use_id: bloc.id, content: JSON.stringify(resultat), ...(resultat?.erreur ? { is_error: true } : {}) });
