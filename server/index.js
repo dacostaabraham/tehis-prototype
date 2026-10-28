@@ -17,7 +17,7 @@ import { instructionsStatiques, contexteDynamique, outils, OUTIL_RECHERCHE_WEB }
 import { reponseDemo } from './demo.js';
 import { creerCoffre } from './coffre.js';
 import { initNotifications } from './notifications.js';
-import { creerDocument, TYPES_DOCUMENTS } from './outils/documents.js';
+import { creerDocument, modifierDocument, listerDocuments, restaurerVersion, partagerDocument, revoquerPartageDocument, TYPES_DOCUMENTS } from './outils/documents.js';
 import { executerOrganisation } from './outils/organisation.js';
 import { preparerEnvoiClient, executerVente, executerEnvoiValide, STATUTS_VENTE, assurerRecapMatinal } from './outils/ventes.js';
 import { executerObjectif, synchroniserObjectifs, annulerCheckinsObjectif } from './outils/objectifs.js';
@@ -320,6 +320,49 @@ app.get('/api/documents/:id', async (req, res) => {
   return d ? res.json(d) : res.status(404).json({ erreur: 'Document introuvable.' });
 });
 app.delete('/api/documents/:id', async (req, res) => { await req.store.deleteDocument(req.params.id); res.json({ ok: true }); });
+/* Historique des versions : chaque création ou réécriture conserve l'ancienne version. */
+app.get('/api/documents/:id/versions', async (req, res) => {
+  const d = await req.store.getDocument(req.params.id);
+  if (!d) return res.status(404).json({ erreur: 'Document introuvable.' });
+  res.json(await req.store.listDocumentVersions(req.params.id));
+});
+app.get('/api/documents/:id/versions/:numero', async (req, res) => {
+  const v = await req.store.getDocumentVersion(req.params.id, Number(req.params.numero));
+  return v ? res.json(v) : res.status(404).json({ erreur: 'Version introuvable.' });
+});
+app.post('/api/documents/:id/versions/:numero/restaurer', async (req, res) => {
+  const r = await restaurerVersion(req.store, req.params.id, Number(req.params.numero));
+  return r.erreur ? res.status(404).json(r) : res.json(r);
+});
+/* Partage par lien (lecture seule, jeton non devinable, révocable). */
+app.get('/api/documents/:id/partage', async (req, res) => {
+  const d = await req.store.getDocument(req.params.id);
+  if (!d) return res.status(404).json({ erreur: 'Document introuvable.' });
+  const p = await req.store.getPartage(req.params.id);
+  res.json(p ? { actif: true, url: `${URL_APP || ''}/partage/${p.jeton}`, cree_le: p.created_at } : { actif: false });
+});
+app.post('/api/documents/:id/partage', async (req, res) => {
+  const r = await partagerDocument(req.store, req.params.id, URL_APP || '');
+  return r.erreur ? res.status(404).json(r) : res.status(201).json(r);
+});
+app.delete('/api/documents/:id/partage', async (req, res) => {
+  const r = await revoquerPartageDocument(req.store, req.params.id);
+  return r.erreur ? res.status(404).json(r) : res.json(r);
+});
+/* Page publique d'un document partagé : lecture seule, sans connexion — seul ce document est visible. */
+app.get('/partage/:jeton', async (req, res) => {
+  const d = await store.getDocumentParJeton(req.params.jeton);
+  if (!d) return res.status(404).send('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Lien invalide — Tehis</title></head><body style="font:15px/1.6 system-ui,sans-serif;color:#1A1916;max-width:640px;margin:40px auto;padding:0 20px"><h1>Lien invalide ou révoqué</h1><p>Ce lien de partage n’existe plus, ou son propriétaire l’a révoqué.</p></body></html>');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com");
+  res.send(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${echapper(d.titre)} — Tehis</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=Space+Grotesk:wght@600&display=swap">
+<style>body{font:15px/1.6 'IBM Plex Sans',system-ui,sans-serif;color:#1A1916;background:#fff;max-width:720px;margin:0 auto;padding:32px 20px}
+h1{font-family:'Space Grotesk',system-ui,sans-serif;font-size:24px;margin:0 0 4px}.note{color:#5A6B7D;font-size:13px;margin:0 0 24px;padding-bottom:16px;border-bottom:1px solid #E1E8EE}
+h3,h4,h5{font-family:'Space Grotesk',system-ui,sans-serif;margin:1.2em 0 .4em}h3{font-size:22px}h4{font-size:17px}p{margin:0 0 .8em}ul,ol{margin:0 0 .8em;padding-left:22px}
+pre{white-space:pre-wrap;background:#F3F0E8;padding:10px;border-radius:8px}</style></head><body>
+<h1>${echapper(d.titre)}</h1><p class="note">Document partagé depuis Tehis · lecture seule · ${new Date(d.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+${markdown(d.contenu)}</body></html>`);
+});
 app.get('/api/documents/:id/imprimer', async (req, res) => {
   const d = await req.store.getDocument(req.params.id);
   if (!d) return res.status(404).send('Document introuvable.');
@@ -704,6 +747,14 @@ async function executerOutil(agent, nom, input = {}, ctx = {}) {
     const d = await creerDocument(ctx.store, input, agent);
     if (d.erreur) return { resultat: d };
     return { resultat: { enregistre: true, id: d.id, titre: d.titre, affiche: 'La carte du document est affichée avec Copier, Partager et PDF.' }, evenement: ['document', d] };
+  }
+  if (nom === 'modifier_document') {
+    const d = await modifierDocument(ctx.store, input, agent);
+    if (d.erreur) return { resultat: d };
+    return { resultat: { enregistre: true, id: d.id, titre: d.titre, version: d.numero, affiche: d.inchange ? 'Le document est inchangé : le contenu est identique à la version actuelle.' : `La carte du document est affichée (version ${d.numero}, l'ancienne version est conservée dans l'historique).` }, evenement: ['document', d] };
+  }
+  if (nom === 'lister_documents') {
+    return { resultat: await listerDocuments(ctx.store) };
   }
   if (['creer_rappel', 'lister_rappels', 'supprimer_rappel', 'gerer_liste', 'lister_listes'].includes(nom)) {
     const r = await executerOrganisation(ctx.store, nom, input);

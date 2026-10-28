@@ -1229,7 +1229,73 @@ async function ouvrirDocument(id) {
   $('#dlg-doc-titre').textContent = d.titre;
   $('#dlg-doc-corps').innerHTML = markdown(d.contenu);
   actionsDocument(d, $('#dlg-doc-actions'));
+  await afficherPartageDocument(d);
+  await afficherHistoriqueDocument(d);
   $('#dlg-doc').showModal();
+}
+
+/** Partage par lien (lecture seule) d'un document : créer, copier, révoquer. */
+async function afficherPartageDocument(d) {
+  const zone = $('#dlg-doc-partage');
+  zone.innerHTML = '<h3>Partager par lien</h3><p class="small muted">Chargement…</p>';
+  let p;
+  try { p = await api(`/api/documents/${d.id}/partage`); } catch { zone.innerHTML = '<h3>Partager par lien</h3><p class="small muted">Impossible de charger le partage.</p>'; return; }
+  if (p.actif) {
+    zone.innerHTML = `<h3>Partager par lien</h3><p class="small">Lien actif (lecture seule) :<br><a href="${echapper(p.url)}" target="_blank" rel="noopener">${echapper(p.url)}</a></p><div class="doc-actions"><button type="button" class="btn small" data-copier-lien>Copier le lien</button><button type="button" class="btn small" data-revoquer>Révoquer le lien</button></div>`;
+    zone.querySelector('[data-copier-lien]').onclick = async (e) => {
+      try { await navigator.clipboard.writeText(p.url); e.target.textContent = 'Lien copié'; } catch { e.target.textContent = 'Copie impossible'; }
+      setTimeout(() => { e.target.textContent = 'Copier le lien'; }, 1800);
+    };
+    zone.querySelector('[data-revoquer]').onclick = async () => {
+      await api(`/api/documents/${d.id}/partage`, { method: 'DELETE' });
+      toast('Lien de partage révoqué.');
+      await afficherPartageDocument(d);
+    };
+  } else {
+    zone.innerHTML = '<h3>Partager par lien</h3><p class="small muted">Personne ne peut voir ce document sauf toi. Crée un lien pour le partager en lecture seule.</p><button type="button" class="btn small" data-creer-lien>Créer un lien de partage</button>';
+    zone.querySelector('[data-creer-lien]').onclick = async () => {
+      await api(`/api/documents/${d.id}/partage`, { method: 'POST' });
+      toast('Lien de partage créé.');
+      await afficherPartageDocument(d);
+    };
+  }
+}
+
+/** Historique des versions d'un document : voir une version, restaurer. */
+async function afficherHistoriqueDocument(d) {
+  const zone = $('#dlg-doc-versions');
+  zone.innerHTML = '<h3>Historique des versions</h3><p class="small muted">Chargement…</p>';
+  let versions;
+  try { versions = await api(`/api/documents/${d.id}/versions`); } catch { zone.innerHTML = '<h3>Historique des versions</h3><p class="small muted">Impossible de charger l’historique.</p>'; return; }
+  if (!versions.length) { zone.innerHTML = '<h3>Historique des versions</h3><p class="small muted">Aucune version enregistrée.</p>'; return; }
+  const courante = Math.max(...versions.map((v) => v.numero));
+  const bloc = document.createElement('div');
+  bloc.innerHTML = `<h3>Historique des versions</h3><ul class="doc-versions">${versions.map((v) => `<li data-numero="${v.numero}">
+    <div><strong>Version ${v.numero}${v.numero === courante ? ' · actuelle' : ''}</strong> — ${echapper(v.titre)}</div>
+    <div class="muted small">${new Date(v.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} · ${v.origine === 'agent' ? 'créée par un agent' : 'créée par toi'} · ${echapper(v.apercu || '')}</div>
+    <div class="doc-actions"><button type="button" class="btn small" data-voir>Voir</button>${v.numero === courante ? '' : '<button type="button" class="btn small" data-restaurer>Restaurer</button>'}</div>
+    <div class="doc-version-contenu" hidden></div>
+  </li>`).join('')}</ul>`;
+  bloc.querySelectorAll('li').forEach((li) => {
+    const numero = Number(li.dataset.numero);
+    li.querySelector('[data-voir]').onclick = async (e) => {
+      const contenu = li.querySelector('.doc-version-contenu');
+      if (contenu.hidden) {
+        const v = await api(`/api/documents/${d.id}/versions/${numero}`);
+        contenu.innerHTML = markdown(v.contenu);
+        contenu.hidden = false;
+        e.target.textContent = 'Masquer';
+      } else { contenu.hidden = true; e.target.textContent = 'Voir'; }
+    };
+    const b = li.querySelector('[data-restaurer]');
+    if (b) b.onclick = async () => {
+      await api(`/api/documents/${d.id}/versions/${numero}/restaurer`, { method: 'POST' });
+      toast(`Version ${numero} restaurée.`);
+      await ouvrirDocument(d.id);
+      afficherAffaires();
+    };
+  });
+  zone.replaceChildren(bloc);
 }
 
 /* ---------- Réglages ---------- */
