@@ -136,7 +136,12 @@ class MemoryStore {
     const x = { id: randomUUID(), user_id: uid, progression: 0, echeance: null, statut: 'actif', source: 'manuel', ...o, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
     this.objectifs.push(x); return x;
   }
-  async listObjectifs(uid) { return this.#a(this.objectifs, uid).sort(tri('created_at')); }
+  async listObjectifs(uid) {
+    return this.#a(this.objectifs, uid)
+      .map((o, i) => [o, i])
+      .sort(([a, ia], [b, ib]) => tri('created_at')(a, b) || ib - ia)
+      .map(([o]) => o);
+  }
   async getObjectif(uid, id) { return this.objectifs.find((o) => o.id === id && o.user_id === uid) || null; }
   async updateObjectif(uid, id, champs) {
     const o = await this.getObjectif(uid, id);
