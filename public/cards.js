@@ -299,6 +299,7 @@ export function carteDigest(d) {
   const blocs = [];
   if (d.ventes?.length) blocs.push(`<div class="digest-sec"><strong>Ventes en attente (${d.ventes.length})</strong>${d.ventes.map((v) => `<div>${echapper(v.client_nom)} — ${echapper(v.produit)}${prix(v)} (${v.statut === 'reserve' ? 'Réservé' : 'Intéressé'})</div>`).join('')}</div>`);
   if (d.rappels?.length) blocs.push(`<div class="digest-sec"><strong>Rappels aujourd'hui (${d.rappels.length})</strong>${d.rappels.map((x) => `<div>${echapper(x.texte)}</div>`).join('')}</div>`);
+  if (d.evenements?.length) blocs.push(`<div class="digest-sec"><strong>📅 Aujourd'hui sur ton agenda (${d.evenements.length})</strong>${d.evenements.map((e) => `<div>${e.touteJournee ? 'Toute la journée' : echapper(String(e.debut || '').slice(11, 16))} — ${echapper(e.titre)}${e.lieu ? ` (${echapper(e.lieu)})` : ''}</div>`).join('')}</div>`);
   if (d.pharmacies?.length) blocs.push(`<div class="digest-sec"><strong>Pharmacies de garde</strong>${d.pharmacies.map((p) => `<div>${echapper(p.nom)}${p.commune ? ` (${echapper(p.commune)})` : ''}${p.telephone ? ` — ${echapper(p.telephone)}` : ''}</div>`).join('')}</div>`);
   blocs.push(`<div class="digest-sec"><strong>💡 Astuce du jour</strong><div>${echapper(d.astuce)}</div></div>`);
   return `<div class="digest-head"><span>☀️ Ton briefing du matin</span><button type="button" class="digest-masquer" data-digest-masquer aria-label="Masquer le briefing du jour">✕</button></div>
