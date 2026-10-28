@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { SCHEMAS_OUTILS_FINANCE } from '../public/shared/finance.js';
 import { SCHEMAS_OUTILS_BUDGET } from '../public/shared/budget.js';
 import { AGENTS } from '../public/shared/agents.js';
-import { SCHEMA_DOCUMENT } from './outils/documents.js';
+import { SCHEMA_DOCUMENT, SCHEMA_MODIFIER_DOCUMENT, SCHEMA_LISTER_DOCUMENTS } from './outils/documents.js';
 import { SCHEMAS_ORGANISATION } from './outils/organisation.js';
 import { SCHEMAS_VENTES, formaterPrix } from './outils/ventes.js';
 import { SCHEMAS_OBJECTIFS } from './outils/objectifs.js';
@@ -91,7 +91,7 @@ Ne promets jamais un délai, un stock ou une garantie que l'utilisateur n'a pas 
 
   redaction: `Tu es l'agent « Rédaction et courriers » de Tehis. Tu écris des textes prêts à envoyer : lettres officielles (demande, réclamation, attestation, démission, congé), courriers à une administration ou à une banque, messages professionnels WhatsApp ou email, publications, discours courts. Tu corriges aussi les textes de l'utilisateur.
 Méthode : demande à qui s'adresse le texte, le but et les faits importants s'ils manquent ; choisis le bon ton (formel pour l'administration, chaleureux pour un client) ; pour une lettre officielle, respecte la présentation d'usage (expéditeur, destinataire, lieu et date, objet, formule d'appel, corps, formule de politesse, signature).
-Utilise « creer_document » pour le texte final. Quand tu corriges un texte, explique en 2 ou 3 points ce que tu as changé.
+Utilise « creer_document » pour le texte final. Quand tu corriges un texte, explique en 2 ou 3 points ce que tu as changé. Pour corriger ou mettre à jour un document déjà créé, utilise « modifier_document » (retrouve son identifiant avec « lister_documents ») : l'ancien contenu est conservé dans l'historique, ne crée pas un nouveau document.
 Tu ne rédiges pas de faux documents (faux certificats, fausses attestations, faux avis) ni de messages destinés à tromper.`,
 
   emploi: `Tu es l'agent « Emploi et CV » de Tehis. Tu aides à trouver un emploi ou un stage en Côte d'Ivoire.
@@ -100,7 +100,7 @@ Ce que tu fais :
 - Lettre de motivation adaptée à une offre précise : reprends les mots-clés de l'offre, relie-les à des exemples réels.
 - Préparation d'entretien : pose une question à la fois, comme un recruteur, puis donne un retour bref et une meilleure formulation.
 - Conseils pour présenter une reconversion, un trou dans le parcours, un premier emploi.
-N'invente jamais un diplôme, une expérience ou une compétence. Utilise « creer_document » (type cv ou motivation) pour les documents finaux.`,
+N'invente jamais un diplôme, une expérience ou une compétence. Utilise « creer_document » (type cv ou motivation) pour les documents finaux. Pour mettre à jour un CV ou une lettre déjà créé, utilise « modifier_document » (retrouve son identifiant avec « lister_documents ») : l'ancien contenu est conservé dans l'historique.`,
 
   budget: `Tu es l'agent « Budget et tontine » de Tehis. Tu aides les familles et les particuliers à tenir leur budget, à épargner et à comprendre leurs tontines.
 Méthode :
@@ -218,12 +218,12 @@ export function outils(agent) {
     switch (agent) {
       case 'finance': return [...SCHEMAS_OUTILS_FINANCE, ...SCHEMAS_OBJECTIFS, OUTIL_MEMOIRE];
       case 'budget': return [...SCHEMAS_OUTILS_BUDGET, ...SCHEMAS_OBJECTIFS, OUTIL_MEMOIRE];
-      case 'vendeur': return [SCHEMA_DOCUMENT, calculPrix, ...SCHEMAS_VENTES, ...SCHEMAS_OBJECTIFS, ...SCHEMAS_ORGANISATION, OUTIL_MEMOIRE];
-      case 'redaction': case 'emploi': case 'repetiteur': return [SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
-      case 'demarches': return [OUTIL_RECHERCHE_WEB, SCHEMA_LIEUX, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
-      case 'sante': return [OUTIL_RECHERCHE_WEB, SCHEMA_LIEUX, ...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
-      case 'logement': return [SCHEMA_LIEUX, ...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
-      case 'organisation': return [...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, OUTIL_MEMOIRE];
+      case 'vendeur': return [SCHEMA_DOCUMENT, SCHEMA_MODIFIER_DOCUMENT, SCHEMA_LISTER_DOCUMENTS, calculPrix, ...SCHEMAS_VENTES, ...SCHEMAS_OBJECTIFS, ...SCHEMAS_ORGANISATION, OUTIL_MEMOIRE];
+      case 'redaction': case 'emploi': case 'repetiteur': return [SCHEMA_DOCUMENT, SCHEMA_MODIFIER_DOCUMENT, SCHEMA_LISTER_DOCUMENTS, OUTIL_MEMOIRE];
+      case 'demarches': return [OUTIL_RECHERCHE_WEB, SCHEMA_LIEUX, SCHEMA_DOCUMENT, SCHEMA_MODIFIER_DOCUMENT, SCHEMA_LISTER_DOCUMENTS, OUTIL_MEMOIRE];
+      case 'sante': return [OUTIL_RECHERCHE_WEB, SCHEMA_LIEUX, ...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, SCHEMA_MODIFIER_DOCUMENT, SCHEMA_LISTER_DOCUMENTS, OUTIL_MEMOIRE];
+      case 'logement': return [SCHEMA_LIEUX, ...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, SCHEMA_MODIFIER_DOCUMENT, SCHEMA_LISTER_DOCUMENTS, OUTIL_MEMOIRE];
+      case 'organisation': return [...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, SCHEMA_MODIFIER_DOCUMENT, SCHEMA_LISTER_DOCUMENTS, OUTIL_MEMOIRE];
       case 'dev': return [...SCHEMAS_DEV, OUTIL_MEMOIRE];
       default: return [OUTIL_SUGGERER_AGENT, OUTIL_MODE_DEV, SCHEMA_LIEUX, ...SCHEMAS_OBJECTIFS, OUTIL_MEMOIRE];
     }
