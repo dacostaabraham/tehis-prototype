@@ -100,9 +100,28 @@ Compagnon IA en 3D avec des **agents du quotidien** pour la Côte d'Ivoire, et u
 | `WHATSAPP_MODELE_RAPPEL`, `WHATSAPP_MODELE_CODE` | Modèles approuvés : rappels hors 24 h, code oublié | vide |
 | `CHARIOW_API_KEY`, `CHARIOW_PULSE_SECRET`, `CHARIOW_PRODUIT_PLUS`, `CHARIOW_PRODUIT_PRO` | Paiement des offres (voir docs/PAIEMENT.md) | vide = paiement fermé |
 | `APP_URL` | Adresse publique de l'app (retour après paiement, liens WhatsApp) | adresse Render |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Agenda Google : identifiants OAuth créés dans Google Cloud Console (voir « Agenda Google ») | vide = agenda désactivé |
 | `DUREE_OFFRE_JOURS` | Durée d'un paiement | `30` |
 | `GARDE_URL` | Page de la liste des pharmacies de garde | business.abidjan.net |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Clés des notifications | générées et gardées en base |
+
+## Agenda Google (connecteur)
+
+L'agent Organisation (et le compagnon) peuvent lire les rendez-vous du jour et créer des événements dans l'agenda Google de l'utilisateur ; les rendez-vous du jour apparaissent dans le briefing du matin et dans « Mes affaires » › Agenda Google. Un rappel Tehis peut aussi y être ajouté avec le bouton 📅. Sans connexion, la section affiche un état vide propre et les rappels continuent de fonctionner seuls.
+
+**À configurer une fois, par Abraham, dans [Google Cloud Console](https://console.cloud.google.com) :**
+
+1. Crée un projet (ex. `Tehis`), puis **API et services › Bibliothèque** : active **Google Calendar API**.
+2. **API et services › Écran de consentement OAuth** : type **Externe**, nom `Tehis`, e-mail de contact, puis **Publier l'application** (sinon les jetons expirent après 7 jours en mode test).
+3. **API et services › Identifiants › Créer des identifiants › ID client OAuth** : type **Application Web**, nom `Tehis`. Dans **URI de redirection autorisés**, ajoute exactement :
+   ```
+   https://<ton-adresse-render>/api/agenda/google/retour
+   ```
+   (l'adresse publique de l'app, `APP_URL` ; en local, `http://localhost:3000/api/agenda/google/retour`).
+4. Copie l'**ID client** et le **Code secret du client** dans les variables d'environnement Render : `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET`. Redéploie.
+5. Dans l'app : « Mes affaires » › Agenda Google › **Connecter Google Agenda**, puis autorise l'accès à ton agenda. Les jetons sont chiffrés (AES-256-GCM, à partir de `SESSION_SECRET`) et stockés par compte ; ils ne sont jamais exposés côté client ni journalisés. **Déconnecter** efface les jetons.
+
+Portée demandée : lecture et création d'événements (`calendar.events`) + adresse e-mail (`openid email`) pour afficher le compte connecté. Tehis ne lit que les événements du jour et ne crée un événement que sur demande explicite de l'utilisateur (agent ou bouton 📅) : rien n'est créé automatiquement.
 
 ## Lancer en local
 

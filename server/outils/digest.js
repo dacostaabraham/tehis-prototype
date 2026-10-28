@@ -44,8 +44,8 @@ function contenuRecap(action) {
   } catch { return { ventes: [], rappels: [], pharmacies: [] }; }
 }
 
-/** Présente une action `recap_matinal` comme digest du jour (avec l'astuce). */
-export function presenterDigest(action, maintenant = new Date()) {
+/** Présente une action `recap_matinal` comme digest du jour (avec l'astuce et les événements d'agenda). */
+export function presenterDigest(action, maintenant = new Date(), { evenements = [] } = {}) {
   const r = contenuRecap(action);
   return {
     date: jourAbidjan(maintenant),
@@ -53,6 +53,7 @@ export function presenterDigest(action, maintenant = new Date()) {
     ventes: r.ventes,
     rappels: r.rappels,
     pharmacies: r.pharmacies,
+    evenements,
     astuce: astuceDuJour(maintenant)
   };
 }
@@ -60,15 +61,22 @@ export function presenterDigest(action, maintenant = new Date()) {
 /**
  * Le digest du jour : le récap matinal du jour, s'il existe déjà ; sinon, il
  * est généré une fois (après 8 h — avant, le digest n'existe pas encore et la
- * fonction renvoie null, la carte reste absente). `lireGardes` est injectable
- * pour les tests.
+ * fonction renvoie null, la carte reste absente). `lireGardes` et
+ * `lireEvenements` sont injectables pour les tests ; sans agenda connecté,
+ * la section événements est simplement absente.
  */
-export async function digestDuJour(store, uid, maintenant = new Date(), { lireGardes } = {}) {
+export async function digestDuJour(store, uid, maintenant = new Date(), { lireGardes, lireEvenements } = {}) {
   const jour = jourAbidjan(maintenant);
   const actions = await store.listActions(uid, { limite: 100 });
   const existant = actions.find((a) => a.outil === 'recap_matinal' && String(a.created_at || '').slice(0, 10) === jour);
-  if (existant) return presenterDigest(existant, maintenant);
-  if (maintenant.getUTCHours() < 8) return null;
-  const { action } = await preparerRecapMatinal(store, uid, maintenant, { lireGardes });
-  return presenterDigest(action, maintenant);
+  let action = existant;
+  if (!action) {
+    if (maintenant.getUTCHours() < 8) return null;
+    ({ action } = await preparerRecapMatinal(store, uid, maintenant, { lireGardes }));
+  }
+  let evenements = [];
+  if (lireEvenements) {
+    try { evenements = (await lireEvenements(jour)) || []; } catch { evenements = []; }
+  }
+  return presenterDigest(action, maintenant, { evenements });
 }
