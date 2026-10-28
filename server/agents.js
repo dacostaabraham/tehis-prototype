@@ -226,11 +226,18 @@ export function outils(agent) {
       case 'demarches': return [OUTIL_RECHERCHE_WEB, SCHEMA_LIEUX, SCHEMA_DOCUMENT, SCHEMA_MODIFIER_DOCUMENT, SCHEMA_LISTER_DOCUMENTS, OUTIL_MEMOIRE];
       case 'sante': return [OUTIL_RECHERCHE_WEB, SCHEMA_LIEUX, ...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, SCHEMA_MODIFIER_DOCUMENT, SCHEMA_LISTER_DOCUMENTS, OUTIL_MEMOIRE];
       case 'logement': return [SCHEMA_LIEUX, ...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, SCHEMA_MODIFIER_DOCUMENT, SCHEMA_LISTER_DOCUMENTS, OUTIL_MEMOIRE];
-      case 'organisation': return [...SCHEMAS_ORGANISATION, ...SCHEMAS_AGENDA, SCHEMA_DOCUMENT, SCHEMA_MODIFIER_DOCUMENT, SCHEMA_LISTER_DOCUMENTS, OUTIL_MEMOIRE];
+      case 'organisation': return [...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, SCHEMA_MODIFIER_DOCUMENT, SCHEMA_LISTER_DOCUMENTS, OUTIL_MEMOIRE];
       case 'dev': return [...SCHEMAS_DEV, OUTIL_MEMOIRE];
       default: return [OUTIL_SUGGERER_AGENT, OUTIL_MODE_DEV, SCHEMA_LIEUX, ...SCHEMAS_OBJECTIFS, ...SCHEMAS_AGENDA, OUTIL_MEMOIRE];
     }
   })();
+  // L'agent Organisation utilise aussi l'agenda Google. Ses outils sont
+  // insérés ici, juste après ses outils propres, plutôt que dans le cas du
+  // switch : la liste des outils de rédaction reste ainsi identique pour
+  // tous les agents qui rédigent des documents.
+  const liste = agent === 'organisation'
+    ? [...base.slice(0, SCHEMAS_ORGANISATION.length), ...SCHEMAS_AGENDA, ...base.slice(SCHEMAS_ORGANISATION.length)]
+    : base;
   // Tous les agents peuvent proposer des boutons de réponse rapide (placé avant la mémoire).
-  return [...base.slice(0, -1), SCHEMA_CHOIX, base.at(-1)];
+  return [...liste.slice(0, -1), SCHEMA_CHOIX, liste.at(-1)];
 }
