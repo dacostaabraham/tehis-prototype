@@ -15,8 +15,8 @@ const PAR_COMPTE = new Set([
   'addDocument', 'listDocuments', 'getDocument', 'deleteDocument',
   'addReminder', 'listReminders', 'deleteReminder', 'updateReminder',
   'getList', 'getListById', 'saveList', 'listLists', 'deleteList',
-  'addAction', 'getAction', 'updateAction', 'getSecret', 'setSecret',
-  'addVente', 'listVentes', 'getVente', 'updateVente', 'deleteVente',
+  'addAction', 'getAction', 'updateAction', 'listActions', 'getSecret', 'setSecret',
+  'addVente', 'listVentes', 'getVente', 'updateVente', 'deleteVente', 'supprimerRappelsAction',
   'listCustomAgents', 'getCustomAgent', 'saveCustomAgent', 'deleteCustomAgent',
   'incrementUsage', 'getUsage', 'addSubscription', 'listSubscriptions',
   'getConversation', 'saveConversation', 'deleteConversations', 'getProgression', 'saveProgression',
@@ -115,6 +115,20 @@ class MemoryStore {
   async addAction(uid, a) { const x = { id: randomUUID(), user_id: uid, statut: 'en_attente', resultat: null, ...a, created_at: new Date().toISOString() }; this.actions.push(x); return x; }
   async getAction(uid, id) { return this.actions.find((a) => a.id === id && a.user_id === uid) || null; }
   async updateAction(uid, id, champs) { const a = await this.getAction(uid, id); if (a) Object.assign(a, champs); return a; }
+  /** Journal d'activité : les actions les plus récentes d'abord (à horodatage égal, la dernière créée d'abord). */
+  async listActions(uid, { limite = 100 } = {}) {
+    return this.#a(this.actions, uid)
+      .map((a, i) => [a, i])
+      .sort(([a, ia], [b, ib]) => tri('created_at')(a, b) || ib - ia)
+      .map(([a]) => a)
+      .slice(0, limite);
+  }
+  /** Supprime les rappels planifiés non envoyés d'un type donné (ex. relance d'une vente payée). */
+  async supprimerRappelsAction(uid, type_action, vente_id) {
+    const avant = this.reminders.length;
+    this.reminders = this.reminders.filter((r) => !(r.user_id === uid && !r.envoye && r.type_action === type_action && r.action_input?.vente_id === vente_id));
+    return avant - this.reminders.length;
+  }
 
   /* Ventes suivies par l'agent Vendeur en ligne (V1 « Vendeur qui agit »). */
   async addVente(uid, v) {
@@ -210,6 +224,8 @@ class PgStore {
       create table if not exists conversations (user_id uuid not null, agent text not null, items jsonb not null, updated_at timestamptz not null default now(), primary key (user_id, agent));
       alter table users add column if not exists progression jsonb;
       ${TABLES_COMPTE.map((t) => `alter table ${t} add column if not exists user_id uuid; create index if not exists ${t}_user on ${t} (user_id);`).join('\n')}
+      alter table reminders add column if not exists type_action text;
+      alter table reminders add column if not exists action_input jsonb;
       alter table lists drop constraint if exists lists_nom_key;
       create unique index if not exists lists_user_nom on lists (user_id, nom);
       insert into profile (id) values (1) on conflict do nothing;`);
@@ -257,7 +273,7 @@ class PgStore {
   async getDocument(uid, id) { return (await this.q('select * from documents where id = $1 and user_id = $2', [id, uid])).rows[0] || null; }
   async deleteDocument(uid, id) { await this.q('delete from documents where id = $1 and user_id = $2', [id, uid]); }
 
-  async addReminder(uid, { texte, quand, repetition }) { return this.#rappel((await this.q('insert into reminders (id, user_id, texte, quand, repetition) values ($1,$2,$3,$4,$5) returning *', [randomUUID(), uid, texte, quand, repetition])).rows[0]); }
+  async addReminder(uid, { texte, quand, repetition, type_action = null, action_input = null }) { return this.#rappel((await this.q('insert into reminders (id, user_id, texte, quand, repetition, type_action, action_input) values ($1,$2,$3,$4,$5,$6,$7) returning *', [randomUUID(), uid, texte, quand, repetition, type_action, action_input ? JSON.stringify(action_input) : null])).rows[0]); }
   async listReminders(uid, { aVenir = false } = {}) { return (await this.q(`select * from reminders where user_id = $1 ${aVenir ? 'and not envoye' : ''} order by quand asc limit 200`, [uid])).rows.map((r) => this.#rappel(r)); }
   async deleteReminder(uid, id) { return (await this.q('delete from reminders where id = $1 and user_id = $2', [id, uid])).rowCount > 0; }
   async dueReminders(maintenant) { return (await this.q('select * from reminders where not envoye and quand <= $1 and user_id is not null', [maintenant])).rows.map((r) => this.#rappel(r)); }
@@ -277,9 +293,11 @@ class PgStore {
   async listLists(uid) { return (await this.q('select * from lists where user_id = $1 order by updated_at desc', [uid])).rows; }
   async deleteList(uid, id) { await this.q('delete from lists where id = $1 and user_id = $2', [id, uid]); }
 
-  async addAction(uid, { outil, input, resume }) { return (await this.q("insert into actions (id, user_id, outil, input, resume, statut) values ($1,$2,$3,$4,$5,'en_attente') returning *", [randomUUID(), uid, outil, JSON.stringify(input), resume])).rows[0]; }
+  async addAction(uid, { outil, input, resume, statut = 'en_attente', resultat = null }) { return (await this.q('insert into actions (id, user_id, outil, input, resume, statut, resultat) values ($1,$2,$3,$4,$5,$6,$7) returning *', [randomUUID(), uid, outil, JSON.stringify(input), resume, statut, resultat ? JSON.stringify(resultat) : null])).rows[0]; }
   async getAction(uid, id) { return (await this.q('select * from actions where id = $1 and user_id = $2', [id, uid])).rows[0] || null; }
   async updateAction(uid, id, { statut, resultat }) { return (await this.q('update actions set statut = $3, resultat = $4 where id = $1 and user_id = $2 returning *', [id, uid, statut, JSON.stringify(resultat ?? null)])).rows[0]; }
+  async listActions(uid, { limite = 100 } = {}) { return (await this.q('select * from actions where user_id = $1 order by created_at desc limit $2', [uid, limite])).rows; }
+  async supprimerRappelsAction(uid, type_action, vente_id) { return (await this.q("delete from reminders where user_id = $1 and not envoye and type_action = $2 and action_input->>'vente_id' = $3", [uid, type_action, vente_id])).rowCount; }
 
   /* Ventes suivies par l'agent Vendeur en ligne (V1 « Vendeur qui agit »). */
   #vente(r) { return r && { ...r, prix: r.prix === null || r.prix === undefined ? null : Number(r.prix), created_at: new Date(r.created_at).toISOString(), updated_at: new Date(r.updated_at).toISOString(), envoye_le: r.envoye_le ? new Date(r.envoye_le).toISOString() : null }; }

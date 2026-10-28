@@ -29,6 +29,55 @@ export function dateRelanceJ2(maintenant = new Date()) {
   return d.toISOString();
 }
 
+/** Prochain récap matinal : demain à 8 h, heure d'Abidjan (= UTC). */
+export function dateRecapMatinal(maintenant = new Date()) {
+  const d = new Date(maintenant);
+  d.setUTCDate(d.getUTCDate() + 1);
+  d.setUTCHours(8, 0, 0, 0);
+  return d;
+}
+
+/**
+ * Programme la relance J+2 d'une vente (une seule : pas de doublon si elle
+ * existe déjà). La relance devient une tâche planifiée : à J+2 à 9 h, Tehis
+ * prépare le message et le met en carte de validation.
+ */
+export async function assurerRappelRelance(store, vente, maintenant = new Date()) {
+  const existants = (await store.listReminders({ aVenir: true })).filter((r) => !r.envoye && r.type_action === 'relance_vente' && r.action_input?.vente_id === vente.id);
+  if (existants.length) return existants[0];
+  return store.addReminder({
+    texte: `Relance J+2 : ${vente.client_nom} — ${vente.produit}`,
+    quand: dateRelanceJ2(maintenant), repetition: 'aucune',
+    type_action: 'relance_vente', action_input: { vente_id: vente.id }
+  });
+}
+
+/** Annule les relances J+2 en attente d'une vente (payée, livrée, envoyée, supprimée). */
+export async function annulerRappelsRelance(store, venteId) { return store.supprimerRappelsAction('relance_vente', venteId); }
+
+/**
+ * Programme le récap matinal quotidien (une seule fois : pas de doublon).
+ * Il se répète ensuite tout seul, chaque matin à 8 h.
+ */
+export async function assurerRecapMatinal(store, maintenant = new Date()) {
+  const existants = (await store.listReminders({ aVenir: true })).filter((r) => !r.envoye && r.type_action === 'recap_matinal');
+  if (existants.length) return existants[0];
+  return store.addReminder({
+    texte: 'Récap du matin : ventes en attente et pharmacies de garde',
+    quand: dateRecapMatinal(maintenant).toISOString(), repetition: 'quotidien',
+    type_action: 'recap_matinal', action_input: {}
+  });
+}
+
+/** Après un changement de statut : relance à programmer ou à annuler. */
+async function apresChangementStatut(store, avant, apres, maintenant) {
+  if (!apres) return;
+  if (apres.statut === 'paye' || apres.statut === 'livre') await annulerRappelsRelance(store, apres.id);
+  else if (['interesse', 'reserve'].includes(apres.statut) && (!avant || !['interesse', 'reserve'].includes(avant.statut))) {
+    await assurerRappelRelance(store, apres, maintenant);
+  }
+}
+
 function validerClient(input = {}) {
   const nom = String(input.client_nom || '').trim().slice(0, 60);
   if (!nom) return { erreur: 'Indique le nom du client.' };
@@ -150,7 +199,7 @@ function presenter(vente) {
 }
 
 /** Exécute suivre_vente, lister_ventes et changer_statut_vente. */
-export async function executerVente(store, nom, input = {}) {
+export async function executerVente(store, nom, input = {}, maintenant = new Date()) {
   if (nom === 'suivre_vente') {
     const client = validerClient(input);
     if (client.erreur) return client;
@@ -163,9 +212,16 @@ export async function executerVente(store, nom, input = {}) {
     if (input.id) {
       const existante = await store.getVente(String(input.id));
       if (!existante) return { erreur: 'Vente introuvable.' };
-      return presenter(await store.updateVente(existante.id, { client_nom: client.nom, client_telephone: client.telephone, produit, prix, statut }));
+      const maj = await store.updateVente(existante.id, { client_nom: client.nom, client_telephone: client.telephone, produit, prix, statut });
+      await apresChangementStatut(store, existante, maj, maintenant);
+      return presenter(maj);
     }
-    return presenter(await store.addVente({ client_nom: client.nom, client_telephone: client.telephone, produit, prix, statut }));
+    const nouvelle = await store.addVente({ client_nom: client.nom, client_telephone: client.telephone, produit, prix, statut });
+    if (['interesse', 'reserve'].includes(nouvelle.statut)) {
+      await assurerRappelRelance(store, nouvelle, maintenant);
+      await assurerRecapMatinal(store, maintenant);
+    }
+    return presenter(nouvelle);
   }
   if (nom === 'lister_ventes') {
     const ventes = await store.listVentes();
@@ -176,7 +232,9 @@ export async function executerVente(store, nom, input = {}) {
     if (statut?.erreur) return statut;
     const vente = await store.getVente(String(input.id || ''));
     if (!vente) return { erreur: 'Vente introuvable.' };
-    return presenter(await store.updateVente(vente.id, { statut }));
+    const maj = await store.updateVente(vente.id, { statut });
+    await apresChangementStatut(store, vente, maj, maintenant);
+    return presenter(maj);
   }
   return { erreur: `Outil inconnu : ${nom}` };
 }
@@ -196,6 +254,8 @@ export async function executerEnvoiValide(store, action, maintenant = new Date()
     const vente = await store.getVente(String(input.vente_id));
     if (!vente) return { erreur: 'Vente introuvable : impossible de marquer l’envoi.' };
     await store.updateVente(vente.id, { envoye: true, envoye_le: maintenant.toISOString() });
+    // Message parti : plus besoin de la relance J+2.
+    await annulerRappelsRelance(store, vente.id);
   }
   return {
     url: preparation.lien,

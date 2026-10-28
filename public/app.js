@@ -1060,10 +1060,45 @@ $('#niveau-btn').addEventListener('click', () => ouvrirProgression());
 $('#dlg-progression').addEventListener('close', () => { $('#prog-fete').hidden = true; });
 
 /* ---------- Mes affaires ---------- */
+/** Journal d'activité : actions en attente (carte de validation) puis historique. */
+const LIBELLES_ACTIVITE = { en_attente: 'À valider', executee: 'Fait', refusee: 'Refusé', echec: 'Échec' };
+function afficherActivite(actions) {
+  const ua = $('#activite-list');
+  ua.innerHTML = actions.length ? '' : `<li class="vide">${etatVide(ICONES_SVG.compagnon, 'Rien pour le moment', 'Quand Tehis préparera une relance ou un récap, il apparaîtra ici.')}</li>`;
+  const ctxActivite = { ...ctxCartes, sauver: () => afficherAffaires(), apresDecision: () => afficherAffaires() };
+  for (const a of actions) {
+    const li = document.createElement('li');
+    const date = `<div class="muted small">${echapper(dateFr(a.created_at))} · ${LIBELLES_ACTIVITE[a.statut] || a.statut}</div>`;
+    if (a.statut === 'en_attente' && a.outil === 'vendeur_envoyer_message') {
+      const prix = a.input?.prix != null ? ` — ${Number(a.input.prix).toLocaleString('fr-FR')} FCFA` : '';
+      li.appendChild(carteValidation({
+        action: {
+          id: a.id, titre: 'Vendeur en ligne — envoi à valider', resume: a.resume,
+          details: [`À : ${a.input?.client_nom || ''} (${a.input?.client_telephone || ''})`, `Produit : ${a.input?.produit || ''}${prix}`, `Message : ${a.input?.message || ''}`],
+          outil: 'vendeur_envoyer_message'
+        },
+        statut: 'en_attente'
+      }, ctxActivite));
+    } else if (a.outil === 'recap_matinal' && a.resultat) {
+      const r = a.resultat;
+      const blocs = [];
+      if (r.ventes?.length) blocs.push(`<strong>Ventes en attente (${r.ventes.length})</strong><br>${r.ventes.map((v) => `${echapper(v.client_nom)} — ${echapper(v.produit)}${v.prix != null ? ` · ${Number(v.prix).toLocaleString('fr-FR')} FCFA` : ''} (${v.statut === 'reserve' ? 'Réservé' : 'Intéressé'})`).join('<br>')}`);
+      if (r.rappels?.length) blocs.push(`<strong>Rappels aujourd'hui (${r.rappels.length})</strong><br>${r.rappels.map((x) => echapper(x.texte)).join('<br>')}`);
+      if (r.pharmacies?.length) blocs.push(`<strong>Pharmacies de garde</strong><br>${r.pharmacies.map((p) => `${echapper(p.nom)}${p.commune ? ` (${echapper(p.commune)})` : ''}${p.telephone ? ` — ${echapper(p.telephone)}` : ''}`).join('<br>')}`);
+      li.innerHTML = `<div><div>☀️ ${echapper(a.resume)}</div>${blocs.length ? `<div class="muted small" style="margin-top:4px">${blocs.join('<br><br>')}</div>` : ''}${date}</div>`;
+    } else {
+      li.innerHTML = `<div><div>${echapper(a.resume)}</div>${date}</div>`;
+    }
+    ua.appendChild(li);
+  }
+}
+
 async function afficherAffaires() {
   const charge = '<li class="muted">Chargement…</li>';
-  $('#rappels-list').innerHTML = charge; $('#docs-list').innerHTML = charge; $('#ventes-list').innerHTML = charge; $('#memory-list').innerHTML = charge; $('#listes-zone').innerHTML = '';
-  const [rappels, listes, docs, memoire, ventes] = await Promise.all(['/api/reminders', '/api/lists', '/api/documents', '/api/memories', '/api/ventes'].map((u) => api(u).catch(() => [])));
+  $('#activite-list').innerHTML = charge; $('#rappels-list').innerHTML = charge; $('#docs-list').innerHTML = charge; $('#ventes-list').innerHTML = charge; $('#memory-list').innerHTML = charge; $('#listes-zone').innerHTML = '';
+  const [actions, rappels, listes, docs, memoire, ventes] = await Promise.all(['/api/actions', '/api/reminders', '/api/lists', '/api/documents', '/api/memories', '/api/ventes'].map((u) => api(u).catch(() => [])));
+
+  afficherActivite(actions);
 
   const ul = $('#rappels-list');
   ul.innerHTML = rappels.length ? '' : `<li class="vide">${etatVide(ICONES_SVG.organisation, 'Aucun rappel', 'Demande à l\u2019agent Organisation : « Rappelle-moi de payer le loyer le 5 à 9 h ».')}</li>`;

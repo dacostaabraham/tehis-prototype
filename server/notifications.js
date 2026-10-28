@@ -2,6 +2,7 @@
 // Sur l'offre gratuite de Render, le serveur s'endort sans visite : un rappel peut alors arriver en retard.
 import webpush from 'web-push';
 import { prochaineOccurrence } from './outils/organisation.js';
+import { traiterRappelPlanifie } from './outils/planifiees.js';
 
 export async function initNotifications(store, { envoyerPush = null, autresCanaux = null } = {}) {
   let publique = process.env.VAPID_PUBLIC_KEY;
@@ -34,9 +35,19 @@ export async function initNotifications(store, { envoyerPush = null, autresCanau
   async function verifierRappels(maintenant = new Date()) {
     const dus = await store.dueReminders(maintenant.toISOString());
     for (const r of dus) {
-      await envoyerA(r.user_id, { titre: 'Rappel', corps: r.texte, tag: r.id, url: '/?panneau=affaires' });
-      // WhatsApp (si le compte l'a demandé) : une panne ne bloque pas les autres rappels.
-      if (autresCanaux) await Promise.resolve(autresCanaux(r)).catch((e) => console.warn('Rappel WhatsApp :', e.message));
+      if (r.type_action) {
+        // Tâche planifiée : Tehis prépare l'action au lieu de seulement notifier.
+        // La carte de validation apparaît dans « Mes affaires » › Activité ; la
+        // notification push y renvoie. Pas de relais WhatsApp : la carte de
+        // validation vit dans l'app. Si la tâche n'a plus lieu d'être (vente
+        // payée, livrée ou déjà envoyée), elle est consommée sans bruit.
+        const traite = await traiterRappelPlanifie(store, r, { notifier: (uid, charge) => envoyerA(uid, charge), maintenant }).catch((e) => ({ ignore: true, raison: e.message }));
+        if (traite.ignore) console.log(`[PLANIFIEE] ${r.id} ignorée : ${traite.raison}`);
+      } else {
+        await envoyerA(r.user_id, { titre: 'Rappel', corps: r.texte, tag: r.id, url: '/?panneau=affaires' });
+        // WhatsApp (si le compte l'a demandé) : une panne ne bloque pas les autres rappels.
+        if (autresCanaux) await Promise.resolve(autresCanaux(r)).catch((e) => console.warn('Rappel WhatsApp :', e.message));
+      }
       const suivant = prochaineOccurrence(r.quand, r.repetition);
       await store.updateReminderGlobal(r.id, suivant ? { quand: suivant } : { envoye: true });
     }
