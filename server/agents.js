@@ -10,6 +10,7 @@ import { SCHEMA_DOCUMENT, SCHEMA_MODIFIER_DOCUMENT, SCHEMA_LISTER_DOCUMENTS } fr
 import { SCHEMAS_ORGANISATION } from './outils/organisation.js';
 import { SCHEMAS_VENTES, formaterPrix } from './outils/ventes.js';
 import { SCHEMAS_OBJECTIFS } from './outils/objectifs.js';
+import { SCHEMAS_AGENDA } from './outils/agenda.js';
 import { SCHEMAS_DEV } from './outils/dev.js';
 import { SCHEMA_LIEUX } from './outils/lieux.js';
 import { SCHEMA_CHOIX } from './outils/interaction.js';
@@ -71,7 +72,8 @@ Tu discutes, tu conseilles, tu aides à réfléchir et à organiser ses idées.
 Tehis propose aussi des agents spécialisés : Vendeur en ligne, Rédaction et courriers, Emploi et CV, Budget et tontine, Finance entreprise, Démarches administratives, Répétiteur scolaire, Organisation et rappels, Santé au quotidien, Logement et déménagement.
 Quand une demande relève clairement de l'un d'eux, réponds brièvement puis utilise « suggerer_agent ».
 Si l'utilisateur dit qu'il est développeur et veut coder ou déployer une application, utilise « proposer_mode_developpeur ».
-Objectifs suivis : quand l'utilisateur parle d'une cible chiffrée (ventes, épargne, tontine, clients…), propose de créer un objectif suivi avec « creer_objectif » (libellé, cible, échéance). Pour un objectif de ventes, mets source à « ventes » : la progression se calcule toute seule depuis ses ventes payées et livrées. Demande-lui ensuite où il en est avec « maj_progression_objectif », et liste ses objectifs avec « lister_objectifs ».`,
+Objectifs suivis : quand l'utilisateur parle d'une cible chiffrée (ventes, épargne, tontine, clients…), propose de créer un objectif suivi avec « creer_objectif » (libellé, cible, échéance). Pour un objectif de ventes, mets source à « ventes » : la progression se calcule toute seule depuis ses ventes payées et livrées. Demande-lui ensuite où il en est avec « maj_progression_objectif », et liste ses objectifs avec « lister_objectifs ».
+Agenda Google : si l'utilisateur demande ce qu'il a aujourd'hui ou veut noter un rendez-vous, utilise « lister_evenements_agenda » et « creer_evenement_agenda » (ce dernier uniquement sur sa demande explicite). Si l'agenda n'est pas connecté, dis-lui de le connecter dans « Mes affaires » › Agenda Google.`,
 
   vendeur: `Tu es l'agent « Vendeur en ligne » de Tehis. Tu aides les commerçants et vendeuses en ligne de Côte d'Ivoire à vendre sur WhatsApp (statuts, catalogue WhatsApp Business), Facebook, Instagram et TikTok.
 Ce que tu fais :
@@ -152,7 +154,8 @@ Tu restes bienveillant et adapté à l'âge de l'élève ; tu ne parles que de s
 - Pour un rappel, calcule la date exacte à partir de la date et l'heure actuelles données dans le contexte, puis utilise « creer_rappel ». Confirme la date en toutes lettres (« vendredi 3 octobre à 9 h »).
 - Pour une liste, utilise « gerer_liste ». Pour savoir ce qui est prévu, utilise « lister_rappels » et « lister_listes ».
 - Pour un planning de semaine, demande les contraintes fixes (travail, école des enfants, trajets), puis propose un planning réaliste avec « creer_document » (type planning).
-- Rappelle que les notifications doivent être activées dans les réglages de l'app pour recevoir les rappels.`,
+- Rappelle que les notifications doivent être activées dans les réglages de l'app pour recevoir les rappels.
+- Agenda Google : quand l'utilisateur demande ce qu'il a aujourd'hui ou veut noter un rendez-vous, utilise « lister_evenements_agenda » et « creer_evenement_agenda » (uniquement sur sa demande explicite). Si l'agenda n'est pas connecté, dis-lui de le connecter dans « Mes affaires » › Agenda Google.`,
 
   sante: `Tu es l'agent « Santé au quotidien » de Tehis, pour la Côte d'Ivoire.
 Ce que tu fais :
@@ -225,9 +228,16 @@ export function outils(agent) {
       case 'logement': return [SCHEMA_LIEUX, ...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, SCHEMA_MODIFIER_DOCUMENT, SCHEMA_LISTER_DOCUMENTS, OUTIL_MEMOIRE];
       case 'organisation': return [...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, SCHEMA_MODIFIER_DOCUMENT, SCHEMA_LISTER_DOCUMENTS, OUTIL_MEMOIRE];
       case 'dev': return [...SCHEMAS_DEV, OUTIL_MEMOIRE];
-      default: return [OUTIL_SUGGERER_AGENT, OUTIL_MODE_DEV, SCHEMA_LIEUX, ...SCHEMAS_OBJECTIFS, OUTIL_MEMOIRE];
+      default: return [OUTIL_SUGGERER_AGENT, OUTIL_MODE_DEV, SCHEMA_LIEUX, ...SCHEMAS_OBJECTIFS, ...SCHEMAS_AGENDA, OUTIL_MEMOIRE];
     }
   })();
+  // L'agent Organisation utilise aussi l'agenda Google. Ses outils sont
+  // insérés ici, juste après ses outils propres, plutôt que dans le cas du
+  // switch : la liste des outils de rédaction reste ainsi identique pour
+  // tous les agents qui rédigent des documents.
+  const liste = agent === 'organisation'
+    ? [...base.slice(0, SCHEMAS_ORGANISATION.length), ...SCHEMAS_AGENDA, ...base.slice(SCHEMAS_ORGANISATION.length)]
+    : base;
   // Tous les agents peuvent proposer des boutons de réponse rapide (placé avant la mémoire).
-  return [...base.slice(0, -1), SCHEMA_CHOIX, base.at(-1)];
+  return [...liste.slice(0, -1), SCHEMA_CHOIX, liste.at(-1)];
 }

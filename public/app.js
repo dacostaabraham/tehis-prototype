@@ -165,6 +165,11 @@ async function ouvrirApp() {
   choisirAgent(accesAgent(memorise, etat.profil).ok ? memorise : 'compagnon');
   const panneau = new URLSearchParams(location.search).get('panneau');
   ouvrirPanneau(['affaires', 'calc', 'reglages'].includes(panneau) ? panneau : 'chat');
+  const retourAgenda = new URLSearchParams(location.search).get('agenda');
+  if (retourAgenda) {
+    history.replaceState(null, '', location.pathname + (panneau ? `?panneau=${panneau}` : ''));
+    toast(retourAgenda === 'connecte' ? 'Agenda Google connecté. Tes rendez-vous du jour apparaissent ici et dans ton briefing.' : 'La connexion à Google Agenda n’a pas abouti. Réessaie depuis « Mes affaires » › Agenda Google.', 6000);
+  }
   afficherDigest();
 }
 
@@ -1116,11 +1121,13 @@ function afficherActivite(actions) {
 
 async function afficherAffaires() {
   const charge = '<li class="muted">Chargement…</li>';
-  $('#activite-list').innerHTML = charge; $('#objectifs-list').innerHTML = charge; $('#rappels-list').innerHTML = charge; $('#docs-list').innerHTML = charge; $('#ventes-list').innerHTML = charge; $('#memory-list').innerHTML = charge; $('#listes-zone').innerHTML = '';
+  $('#activite-list').innerHTML = charge; $('#objectifs-list').innerHTML = charge; $('#rappels-list').innerHTML = charge; $('#agenda-list').innerHTML = charge; $('#docs-list').innerHTML = charge; $('#ventes-list').innerHTML = charge; $('#memory-list').innerHTML = charge; $('#listes-zone').innerHTML = '';
   const [actions, objectifs, rappels, listes, docs, memoire, ventes] = await Promise.all(['/api/actions', '/api/objectifs', '/api/reminders', '/api/lists', '/api/documents', '/api/memories', '/api/ventes'].map((u) => api(u).catch(() => [])));
+  const [agendaStatut, agendaJour] = await Promise.all([api('/api/agenda/statut').catch(() => null), api('/api/agenda/evenements').catch(() => null)]);
 
   afficherActivite(actions);
   afficherObjectifs(objectifs);
+  afficherAgenda(agendaStatut, agendaJour);
 
   const ul = $('#rappels-list');
   ul.innerHTML = rappels.length ? '' : `<li class="vide">${etatVide(ICONES_SVG.organisation, 'Aucun rappel', 'Demande à l\u2019agent Organisation : « Rappelle-moi de payer le loyer le 5 à 9 h ».')}</li>`;
@@ -1128,6 +1135,15 @@ async function afficherAffaires() {
     const li = document.createElement('li');
     li.innerHTML = `<div><div>🔔 ${echapper(r.texte)}</div><div class="muted small">${echapper(dateFr(r.quand))}</div></div><button type="button" class="suppr">Supprimer</button>`;
     li.querySelector('button').onclick = async () => { await api(`/api/reminders/${r.id}`, { method: 'DELETE' }); li.remove(); };
+    if (agendaStatut?.connecte) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn small'; b.textContent = '📅 Agenda'; b.title = 'Ajouter ce rappel à Google Agenda';
+      b.onclick = async () => {
+        try { await api('/api/agenda/evenements', { method: 'POST', body: JSON.stringify({ rappel_id: r.id }) }); toast('Rappel ajouté à ton agenda Google.'); afficherAffaires(); }
+        catch (ex) { toast(ex.message); }
+      };
+      li.appendChild(b);
+    }
     ul.appendChild(li);
   }
 
@@ -1156,6 +1172,23 @@ async function afficherAffaires() {
       catch (ex) { toast(ex.message); e.target.value = v.statut; }
     };
     li.querySelector('.suppr').onclick = async () => { await api(`/api/ventes/${v.id}`, { method: 'DELETE' }); li.remove(); };
+    // Contacts du téléphone (API Contact Picker, Android/Chrome) : choisir le
+    // client dans ses contacts pour lier son vrai nom et son numéro à la vente.
+    // Sans cette API, l'ajout manuel par l'agent Vendeur reste le chemin principal.
+    if (navigator.contacts?.select) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn small'; b.textContent = '📇 Contact'; b.title = 'Choisir ce client dans tes contacts';
+      b.onclick = async () => {
+        try {
+          const choix = await navigator.contacts.select(['name', 'tel'], { multiple: false });
+          const c = choix?.[0];
+          if (!c?.tel?.[0]) { toast('Ce contact n’a pas de numéro.'); return; }
+          await api(`/api/ventes/${v.id}`, { method: 'PATCH', body: JSON.stringify({ client_nom: String(c.name?.[0] || v.client_nom).slice(0, 60), client_telephone: c.tel[0] }) });
+          afficherAffaires();
+        } catch (ex) { if (ex?.name !== 'AbortError') toast(ex.message || 'Contact non choisi.'); }
+      };
+      li.appendChild(b);
+    }
     uv.appendChild(li);
   }
 
@@ -1167,6 +1200,42 @@ async function afficherAffaires() {
     li.querySelector('button').onclick = async () => { await api(`/api/memories/${m.id}`, { method: 'DELETE' }); li.remove(); };
     um.appendChild(li);
   }
+}
+
+/** Agenda Google : état de connexion + rendez-vous du jour (état vide propre sinon). */
+function afficherAgenda(statut, jour) {
+  const ua = $('#agenda-list');
+  if (!statut) {
+    ua.innerHTML = `<li class="vide">${etatVide(ICONES_SVG.organisation, 'Agenda indisponible', 'Impossible de joindre le serveur pour le moment.')}</li>`;
+    return;
+  }
+  if (!statut.configure) {
+    ua.innerHTML = `<li class="vide">${etatVide(ICONES_SVG.organisation, 'Agenda Google non configuré', 'L’équipe Tehis doit ajouter les identifiants Google (voir README). Tes rappels continuent de fonctionner seuls.')}</li>`;
+    return;
+  }
+  if (!statut.connecte) {
+    ua.innerHTML = `<li class="vide">${etatVide(ICONES_SVG.organisation, 'Agenda Google non connecté', 'Connecte ton compte Google pour voir tes rendez-vous ici et les retrouver dans ton briefing du matin.')}</li>`;
+    const li = document.createElement('li');
+    li.innerHTML = `<button type="button" class="btn small accent">Connecter Google Agenda</button>`;
+    li.querySelector('button').onclick = () => { location.href = '/api/agenda/google/connecter'; };
+    ua.appendChild(li);
+    return;
+  }
+  const evs = jour?.evenements || [];
+  ua.innerHTML = evs.length ? '' : `<li class="vide">${etatVide(ICONES_SVG.organisation, 'Rien aujourd’hui', 'Aucun rendez-vous sur ton agenda Google pour aujourd’hui.')}</li>`;
+  for (const e of evs) {
+    const li = document.createElement('li');
+    const heure = e.touteJournee ? 'Toute la journée' : String(e.debut || '').slice(11, 16);
+    li.innerHTML = `<div><div><strong>${echapper(e.titre)}</strong></div><div class="muted small">${echapper(heure)}${e.lieu ? ` · ${echapper(e.lieu)}` : ''}</div></div>`;
+    ua.appendChild(li);
+  }
+  const pied = document.createElement('li');
+  pied.innerHTML = `<div class="muted small">Connecté : ${echapper(statut.email || 'compte Google')}</div><button type="button" class="btn small danger">Déconnecter</button>`;
+  pied.querySelector('button').onclick = async () => {
+    try { await api('/api/agenda/deconnecter', { method: 'POST' }); afficherAffaires(); }
+    catch (ex) { toast(ex.message); }
+  };
+  ua.appendChild(pied);
 }
 
 /** Objectifs suivis : progression visible, mise à jour à la main ou calculée depuis les ventes. */
