@@ -662,7 +662,10 @@ function initDictee() {
   });
 }
 
-async function envoyer(texte, { auto = false, agent = etat.agent } = {}) {
+/** Infos pour le module d'appel vocal (espèce du compagnon, agent courant). */
+export const infosAppel = () => ({ espece: etat.profil?.espece || 'chat', agent: etat.agent });
+
+export async function envoyer(texte, { auto = false, agent = etat.agent } = {}) {
   while (etat.envoi) await new Promise((r) => setTimeout(r, 200));
   if (!auto && !navigator.onLine) {
     afficherErreur('Tu es hors ligne : reconnecte-toi puis réessaie.', () => envoyer(texte, { agent }));
@@ -751,11 +754,12 @@ async function envoyer(texte, { auto = false, agent = etat.agent } = {}) {
     // L'historique garde au plus 80 éléments par agent.
     delete envoisEnAttente[agent];
     sauverHisto(agent, items);
-    if (lectureAuto && visible && aLire.trim() && !auto) {
+    if (lectureAuto && visible && aLire.trim() && !auto && !window.__appelEnCours) {
       const derniere = [...zone.querySelectorAll('.msg.bot .ecouter')].at(-1);
       lire(aLire, derniere);
     }
     zone.scrollTop = zone.scrollHeight;
+    return aLire;
   } catch (ex) {
     // Rien n'a été répondu : le message n'est pas gardé, on propose de le renvoyer.
     bulle.remove();
