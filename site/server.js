@@ -179,6 +179,7 @@ function page(fichier) {
 }
 app.get('/', page('index.html'));
 app.get('/confidentialite', page('confidentialite.html'));
+app.get('/conditions', page('conditions.html'));
 app.use(express.static(join(here, 'public'), { index: false }));
 app.use((_req, res) => res.status(404).redirect('/'));
 
