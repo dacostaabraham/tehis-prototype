@@ -6,6 +6,22 @@ import { randomBytes, timingSafeEqual, createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { lookup } from 'node:dns/promises';
+
+// Render ne route pas l'IPv6 sortant, et pg 8 ignore l'option `family`
+// (son connect(port, host) ne transmet aucune option) : avec un hôte
+// dual-stack comme Supabase, Node tentait l'IPv6 → ENETUNREACH.
+// On résout donc l'IPv4 nous-mêmes et on l'injecte dans l'URL.
+async function urlPostgresIPv4(url) {
+  const u = new URL(url);
+  if (/^(localhost|127\.0\.0\.1|::1)$/.test(u.hostname)) return url;
+  const { address } = await lookup(u.hostname, { family: 4 });
+  u.hostname = address;
+  return u.toString();
+}
+const DATABASE_URL_RESOLUE = process.env.DATABASE_URL
+  ? await urlPostgresIPv4(process.env.DATABASE_URL)
+  : null;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3100);
@@ -16,7 +32,7 @@ const ACTIVITES = ['commerce', 'vente-en-ligne', 'services', 'restauration', 'ar
 
 /* ---------- Stockage ---------- */
 function creerStockage() {
-  if (!process.env.DATABASE_URL) {
+  if (!DATABASE_URL_RESOLUE) {
     const lignes = [];
     return {
       kind: 'memoire-vive',
@@ -30,9 +46,9 @@ function creerStockage() {
       async tous() { return [...lignes].reverse(); }
     };
   }
-  const url = process.env.DATABASE_URL;
-  // family: 4 — Render ne route pas l'IPv6 sortant ; les hôtes Supabase sont
-  // dual-stack et Node choisirait l'IPv6 → ENETUNREACH (constaté le 02/11/2026).
+  const url = DATABASE_URL_RESOLUE;
+  // L'URL contient déjà une IPv4 (résolue au chargement) : `family` est
+  // conservé par prudence mais pg l'ignore (constaté le 02/11).
   const pool = new pg.Pool({ connectionString: url, family: 4, ssl: /localhost|127\.0\.0\.1/.test(url) ? false : { rejectUnauthorized: false } });
   const q = (s, p) => pool.query(s, p);
   return {

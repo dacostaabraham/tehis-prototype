@@ -3,6 +3,22 @@
 // le reste du serveur (outils, agents) l'utilise sans jamais voir les données des autres.
 import pg from 'pg';
 import { randomUUID, randomBytes } from 'node:crypto';
+import { lookup } from 'node:dns/promises';
+
+// Render ne route pas l'IPv6 sortant, et pg 8 ignore l'option `family`
+// (son connect(port, host) ne transmet aucune option) : avec un hôte
+// dual-stack comme Supabase, Node tentait l'IPv6 → ENETUNREACH.
+// On résout donc l'IPv4 nous-mêmes et on l'injecte dans l'URL.
+async function urlPostgresIPv4(url) {
+  const u = new URL(url);
+  if (/^(localhost|127\.0\.0\.1|::1)$/.test(u.hostname)) return url;
+  const { address } = await lookup(u.hostname, { family: 4 });
+  u.hostname = address;
+  return u.toString();
+}
+const DATABASE_URL_RESOLUE = process.env.DATABASE_URL
+  ? await urlPostgresIPv4(process.env.DATABASE_URL)
+  : null;
 
 const SENSIBLE = /(sant[ée]|maladie|diagnostic|m[ée]dicament|IBAN|num[ée]ro de (compte|carte)|CNI|passeport|mot de passe|token|cl[ée] api)/i;
 const tri = (k, sens = -1) => (a, b) => (String(a[k]) < String(b[k]) ? -sens : String(a[k]) > String(b[k]) ? sens : 0);
@@ -262,8 +278,8 @@ const TABLES_COMPTE = ['memories', 'documents', 'document_versions', 'partages_d
 
 class PgStore {
   constructor(url) {
-    // family: 4 — Render ne route pas l'IPv6 sortant ; les hôtes Supabase sont
-    // dual-stack et Node choisirait l'IPv6 → ENETUNREACH (constaté le 02/11/2026).
+    // L'URL reçue contient déjà une IPv4 (résolue au chargement du module) :
+    // `family` est conservé par prudence mais pg l'ignore (constaté le 02/11).
     this.pool = new pg.Pool({ connectionString: url, family: 4, ssl: /localhost|127\.0\.0\.1/.test(url) ? false : { rejectUnauthorized: false } });
   }
   get kind() { return 'postgresql'; }
@@ -492,7 +508,7 @@ class PgStore {
 }
 
 export function createStore() {
-  return process.env.DATABASE_URL ? new PgStore(process.env.DATABASE_URL) : new MemoryStore();
+  return DATABASE_URL_RESOLUE ? new PgStore(DATABASE_URL_RESOLUE) : new MemoryStore();
 }
 
 export function memoireAutorisee(fait) {
