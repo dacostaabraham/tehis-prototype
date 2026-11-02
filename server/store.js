@@ -262,7 +262,9 @@ const TABLES_COMPTE = ['memories', 'documents', 'document_versions', 'partages_d
 
 class PgStore {
   constructor(url) {
-    this.pool = new pg.Pool({ connectionString: url, ssl: /localhost|127\.0\.0\.1/.test(url) ? false : { rejectUnauthorized: false } });
+    // family: 4 — Render ne route pas l'IPv6 sortant ; les hôtes Supabase sont
+    // dual-stack et Node choisirait l'IPv6 → ENETUNREACH (constaté le 02/11/2026).
+    this.pool = new pg.Pool({ connectionString: url, family: 4, ssl: /localhost|127\.0\.0\.1/.test(url) ? false : { rejectUnauthorized: false } });
   }
   get kind() { return 'postgresql'; }
   pour(uid) { return vue(this, uid); }
