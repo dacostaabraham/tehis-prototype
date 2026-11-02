@@ -31,7 +31,9 @@ function creerStockage() {
     };
   }
   const url = process.env.DATABASE_URL;
-  const pool = new pg.Pool({ connectionString: url, ssl: /localhost|127\.0\.0\.1/.test(url) ? false : { rejectUnauthorized: false } });
+  // family: 4 — Render ne route pas l'IPv6 sortant ; les hôtes Supabase sont
+  // dual-stack et Node choisirait l'IPv6 → ENETUNREACH (constaté le 02/11/2026).
+  const pool = new pg.Pool({ connectionString: url, family: 4, ssl: /localhost|127\.0\.0\.1/.test(url) ? false : { rejectUnauthorized: false } });
   const q = (s, p) => pool.query(s, p);
   return {
     kind: 'postgresql',
