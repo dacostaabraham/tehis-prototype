@@ -13,6 +13,7 @@ import { SCHEMAS_OBJECTIFS } from './outils/objectifs.js';
 import { SCHEMAS_AGENDA } from './outils/agenda.js';
 import { SCHEMAS_DEV } from './outils/dev.js';
 import { SCHEMA_LIEUX } from './outils/lieux.js';
+import { SCHEMAS_LOISIRS } from './outils/loisirs.js';
 import { SCHEMA_CHOIX } from './outils/interaction.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -33,7 +34,7 @@ export const OUTIL_MEMOIRE = {
 
 const OUTIL_SUGGERER_AGENT = {
   name: 'suggerer_agent',
-  description: "Affiche un bouton pour passer à un agent spécialisé quand la demande relève de lui (vente, courriers, emploi, budget, finance d'entreprise, démarches, devoirs, rappels, santé, logement).",
+  description: "Affiche un bouton pour passer à un agent spécialisé quand la demande relève de lui (vente, courriers, emploi, budget, finance d'entreprise, démarches, devoirs, rappels, santé, logement, cinéma et loisirs).",
   input_schema: {
     type: 'object',
     properties: { agent: { type: 'string', enum: Object.keys(AGENTS).filter((a) => a !== 'compagnon' && a !== 'dev') }, raison: { type: 'string', description: 'Une phrase : ce que cet agent fera pour lui' } },
@@ -69,7 +70,7 @@ Règles communes :
 const ROLES = {
   compagnon: `Tu es le compagnon personnel de l'utilisateur dans l'application Tehis : chaleureux, utile, curieux de ses projets.
 Tu discutes, tu conseilles, tu aides à réfléchir et à organiser ses idées.
-Tehis propose aussi des agents spécialisés : Vendeur en ligne, Rédaction et courriers, Emploi et CV, Budget et tontine, Finance entreprise, Démarches administratives, Répétiteur scolaire, Organisation et rappels, Santé au quotidien, Logement et déménagement.
+Tehis propose aussi des agents spécialisés : Vendeur en ligne, Rédaction et courriers, Emploi et CV, Budget et tontine, Finance entreprise, Démarches administratives, Répétiteur scolaire, Organisation et rappels, Santé au quotidien, Logement et déménagement, Loisirs et cinéma.
 Quand une demande relève clairement de l'un d'eux, réponds brièvement puis utilise « suggerer_agent ».
 Si l'utilisateur dit qu'il est développeur et veut coder ou déployer une application, utilise « proposer_mode_developpeur ».
 Objectifs suivis : quand l'utilisateur parle d'une cible chiffrée (ventes, épargne, tontine, clients…), propose de créer un objectif suivi avec « creer_objectif » (libellé, cible, échéance). Pour un objectif de ventes, mets source à « ventes » : la progression se calcule toute seule depuis ses ventes payées et livrées. Demande-lui ensuite où il en est avec « maj_progression_objectif », et liste ses objectifs avec « lister_objectifs ».
@@ -184,6 +185,14 @@ Méthode :
 Tu peux créer des rappels de visite avec « creer_rappel » et des listes avec « gerer_liste ».
 Pour évaluer un quartier, utilise « chercher_lieux » avec « pres_de » (marché, école, pharmacie, supermarché, banque, station) et commente ce qui est proche ou loin.`,
 
+  loisirs: `Tu es l'agent « Loisirs et cinéma » de Tehis, pour Abidjan (cinémas Majestic : Ivoire à Cocody, Prima, Sococé, Ficgayo).
+Ce que tu fais :
+- Dire ce qui passe : films du jour, du soir ou du week-end, par cinéma, par genre ou par budget. Utilise TOUJOURS tes outils catalogue (« chercher_seances », « chercher_films_genre », « recommander_film », « detail_film ») : tu n'inventes jamais un film, une heure, un cinéma ou un prix. Les heures sont celles d'Abidjan (UTC+0). Si le catalogue ne renvoie rien pour un jour, propose un autre jour ou un autre cinéma, sans inventer.
+- Proposer 2 ou 3 films avec le cinéma, le jour, l'heure et les prix (adulte / junior de 3 à 17 ans). Adulte 5 000 FCFA et junior 3 000 FCFA à l'Ivoire ; 3 000 et 2 500 FCFA dans les autres Majestic.
+- Préparer une réservation (offres Plus et Pro seulement ; le catalogue est gratuit pour tous) : quand l'utilisateur choisit, récapitule film, cinéma, jour, heure, nombre de places et montant total, puis demande ce qui manque (email, prénom, nom, adresse, code postal, ville — 2 questions au plus à la fois). Appelle « preparer_reservation » avec les identifiants (film_id, cinema_id, seance_id) renvoyés par le catalogue, puis « suivre_reservation » avec le booking_id.
+- Quand le statut est « en attente de paiement », donne le lien de paiement CentralBill (central_bill_url) : l'utilisateur paie sur son téléphone (Mobile Money ou carte), la facture expire après 15 minutes. Ne présente JAMAIS la réservation comme terminée avant le paiement. Si le statut est encore « en préparation », dis de patienter une minute puis vérifie de nouveau. Si la vente en ligne est indisponible pour une séance, propose une autre séance ou l'achat en caisse au cinéma.
+Règles : placement libre au cinéma, pas de choix de siège ; tu ne paies jamais à la place de l'utilisateur et tu ne demandes jamais un mot de passe, un code ou un numéro de carte. Ne promets jamais une séance ou un prix que le catalogue n'a pas confirmés.`,
+
   dev: `Tu es le mode développeur de Tehis : un développeur senior backend et frontend qui conçoit, écrit et déploie des applications pour l'utilisateur, lui-même développeur.
 Outils : lecture et écriture sur GitHub, création et déploiement de services sur Render. Tu ne peux pas exécuter de code : tu écris un code juste du premier coup, simple et testé mentalement, avec un README qui explique comment le lancer.
 Méthode :
@@ -226,6 +235,7 @@ export function outils(agent) {
       case 'demarches': return [OUTIL_RECHERCHE_WEB, SCHEMA_LIEUX, SCHEMA_DOCUMENT, SCHEMA_MODIFIER_DOCUMENT, SCHEMA_LISTER_DOCUMENTS, OUTIL_MEMOIRE];
       case 'sante': return [OUTIL_RECHERCHE_WEB, SCHEMA_LIEUX, ...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, SCHEMA_MODIFIER_DOCUMENT, SCHEMA_LISTER_DOCUMENTS, OUTIL_MEMOIRE];
       case 'logement': return [SCHEMA_LIEUX, ...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, SCHEMA_MODIFIER_DOCUMENT, SCHEMA_LISTER_DOCUMENTS, OUTIL_MEMOIRE];
+      case 'loisirs': return [...SCHEMAS_LOISIRS, OUTIL_MEMOIRE];
       case 'organisation': return [...SCHEMAS_ORGANISATION, SCHEMA_DOCUMENT, SCHEMA_MODIFIER_DOCUMENT, SCHEMA_LISTER_DOCUMENTS, OUTIL_MEMOIRE];
       case 'dev': return [...SCHEMAS_DEV, OUTIL_MEMOIRE];
       default: return [OUTIL_SUGGERER_AGENT, OUTIL_MODE_DEV, SCHEMA_LIEUX, ...SCHEMAS_OBJECTIFS, ...SCHEMAS_AGENDA, OUTIL_MEMOIRE];

@@ -13,6 +13,7 @@ export const COULEURS_AGENTS = {
   organisation: '#0284C7',
   sante: '#DC2626',
   logement: '#92400E',
+  loisirs: '#7C2D12',
   dev: '#334155'
 };
 
@@ -30,6 +31,7 @@ export const ICONES_SVG = {
   organisation: svg('<rect x="4" y="5.5" width="16" height="15" rx="2.5"/><path d="M4 10h16M8.5 3v4M15.5 3v4"/><path d="M9 14.5l2 2 4-4.5"/>'),
   sante: svg('<path d="M12 20.5s-7.5-4.6-7.5-10.4A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.5c0 5.8-7.5 10.4-7.5 10.4z"/><path d="M7 12h3l1.5-2.5L13 13l1-1.5H17"/>'),
   logement: svg('<path d="M4 11.5L12 4.5l8 7"/><path d="M6 10.5V20h12v-9.5"/>'),
+  loisirs: svg('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M7 5v4M11 5v4M15 5v4M19 5v4"/><path d="M10 12.5l5 2-5 2z"/>'),
   dev: svg('<path d="M8.5 7L3.5 12l5 5M15.5 7l5 5-5 5"/>')
 };
 

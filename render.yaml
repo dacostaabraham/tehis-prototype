@@ -54,6 +54,10 @@ services:
       # ne plus lier à une base Render via fromDatabase.
       - key: DATABASE_URL
         sync: false
+      # Microservice cinéma (agent Loisirs) : URL du service déployé.
+      # Vide = valeur par défaut dans server/outils/loisirs.js.
+      - key: CINE_ELYSIA_URL
+        sync: false
 
   # Site de prélancement (liste d'attente). Partage la base de l'app.
   - type: web
