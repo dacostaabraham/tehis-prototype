@@ -163,7 +163,7 @@ Réglés dans `public/shared/agents.js` (`QUOTAS`). L'administrateur n'a pas de 
 
 ```
 server/index.js              API, mot de passe, chat Claude en flux, boucle d'outils, validations
-server/agents.js             instructions des 10 agents et leurs outils
+server/agents.js             instructions des 11 agents et leurs outils
 server/perso.js              agents personnalisés : fiche, cadre, outils, brouillon
 public/perso.js              écran « Crée ton agent »
 server/outils/               documents, rappels et listes, mode développeur (GitHub, Render)

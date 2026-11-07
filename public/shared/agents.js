@@ -93,6 +93,12 @@ export const AGENTS = {
 ,
     actions: [{ categorie: 'marche', libelle: 'Marchés' }, { categorie: 'ecole', libelle: 'Écoles' }, { categorie: 'pharmacie', libelle: 'Pharmacies' }, { categorie: 'supermarche', libelle: 'Supermarchés' }, { categorie: 'transfert_argent', libelle: 'Transfert d\'argent' }]
   },
+  loisirs: {
+    nom: 'Loisirs et cinéma', icone: '🎬', groupe: 'quotidien', offre: 'gratuit', modele: 'leger',
+    resume: 'Films du week-end, séances Majestic, réservation (Plus/Pro)',
+    intro: "Je te dis ce qui passe au cinéma à Abidjan : films du jour ou du week-end, par cinéma Majestic, par genre ou par budget, avec les horaires et les prix. Et si tu as Plus ou Pro, je prépare ta réservation : tu paies ensuite sur ton téléphone. Dis-moi ce que tu veux voir.",
+    suggestions: ["Qu'est-ce qui passe ce week-end ?", 'Un bon film d\u2019action à moins de 10 000 FCFA', 'Séances de ce soir au Majestic Ivoire', 'Réserve-moi 2 places pour Ebinto samedi']
+  },
   dev: {
     nom: 'Mode développeur', icone: '⌨️', groupe: 'dev', offre: 'pro', modele: 'fort', developpeur: true,
     resume: 'Code, GitHub et déploiement Render, avec ta validation',

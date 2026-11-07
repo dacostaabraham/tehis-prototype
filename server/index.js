@@ -24,6 +24,7 @@ import { executerObjectif, synchroniserObjectifs, annulerCheckinsObjectif } from
 import { configAgenda, urlAutorisation, echangerCode, lireJetons, sauverJetons, supprimerJetons, listerEvenementsJour, creerEvenement, executerAgenda } from './outils/agenda.js';
 import { digestDuJour } from './outils/digest.js';
 import { chercherLieux, positionValide } from './outils/lieux.js';
+import { executerLoisirs, NOMS_OUTILS_LOISIRS } from './outils/loisirs.js';
 import { preparerChoix } from './outils/interaction.js';
 import { executerDev, preparerAction, OUTILS_A_VALIDER, SCHEMAS_DEV } from './outils/dev.js';
 import { OUTILS_FINANCE } from '../public/shared/finance.js';
@@ -841,6 +842,13 @@ async function executerOutil(agent, nom, input = {}, ctx = {}) {
   if (nom === 'poser_choix') {
     const c = preparerChoix(input);
     return c.erreur ? { resultat: c } : { resultat: { affiche: true, consigne: "Les boutons sont affichés. Attends la réponse de l'utilisateur." }, evenement: ['choix', c] };
+  }
+  // Loisirs et cinéma (microservice tehis-cine-elysia) : catalogue gratuit,
+  // réservation Plus/Pro (contrôle fait dans l'outil, sans appel réseau si refusé).
+  if (NOMS_OUTILS_LOISIRS.has(nom)) {
+    if (agent !== 'loisirs') return { resultat: { erreur: 'Cet outil est réservé à l\u2019agent Loisirs et cinéma.' } };
+    const r = await executerLoisirs(nom, input, { offre: ctx.req?.compte?.offre, userId: ctx.req?.compte?.id });
+    return { resultat: r, evenement: r.erreur ? null : ['tool', { name: nom, input, result: r }] };
   }
   if (nom === 'suggerer_agent') {
     if (!AGENTS[input.agent]) return { resultat: { erreur: 'Agent inconnu.' } };
